@@ -1,33 +1,34 @@
-# Visor San José — Editor puntos–tracker
+# Visores — Factiun
 
-> Visor offline para casar el levantamiento topográfico con los IDs de seguidor de la PSFV San José (Acciona, Aragón).
+> Visores offline de levantamientos topográficos y geometría as-built de seguidores solares. Un repositorio, un despliegue, varias plantas.
 
-## Qué es
-Aplicación web de una sola página para **revisar y corregir** la asignación de los puntos del levantamiento a cada tracker del proyecto **San José**: 18.190 puntos, 2.289 trackers bifila y 21 NCU. La asignación inicial se resuelve por flujo de coste mínimo (min-cost flow, NetworkX) y el visor permite auditarla y reasignar a mano. Funciona 100% offline (datos y librería se cargan como `<script>`, sin `fetch`).
+## Qué hay
 
-## Funcionalidades
-- **Mapa interactivo** (Plotly/WebGL) con los 18.190 puntos y los 2.289 motores: zoom, pan y hover con la ficha de cada punto (tracker, esquina, mesa, estado).
-- **Coloreado** por tracker (grafo de 7 colores, ningún vecino comparte color), por **NCU** (21 tonos) o por **estado**.
-- **Filtros** por NCU y por estado (completos / incompletos / a revisar / sin puntos) con contadores en vivo.
-- **Editor**: reasigna un punto a un tracker; la esquina (NE/NO/SE/SO) y la mesa se recalculan por geometría y el estado se actualiza al instante.
-- **Deshacer / revertir todo** y **exportación a CSV** (formato Excel español `;` y `,`, UTF-8 con BOM).
+| Planta | Código | Qué resuelve |
+|---|---|---|
+| [**Ayora**](https://imoriana3.github.io/visores/ayora/) | 24025 · Valencia | Geometría as-built de 754 seguidores bifila (1.508 filas) desde 3.069 puntos, y los vectores de backtracking corregido por terreno que se cargan en cada TCU. |
+| [**San José**](https://imoriana3.github.io/visores/san-jose/) | 24019 · Arequipa, Acciona | Editor de la asignación de 18.190 puntos a 2.289 seguidores, resuelta por flujo de coste mínimo y corregible a mano. |
 
-## Uso
-1. Abre `index.html` (o el despliegue) en el navegador — sin servidor.
-2. Filtra por NCU/estado; con `Estado = No completos` y `Color = Estado` localizas lo pendiente.
-3. Haz clic en un punto (se rodea en **cian**) y luego en el rombo (motor) del tracker destino, o escribe el ID y pulsa **Asignar**.
-4. **Exporta el CSV** al terminar. Atajos: `Esc` deselecciona · rueda = zoom · arrastrar = pan.
+## Estructura
 
-## Stack
-HTML/CSS/JS offline · **Plotly 3.6.0** (vendorizado en `js/` para uso sin red) · datos pre-resueltos con **NetworkX** (min-cost flow) y generados con `tools/generate_data.py` (pandas, numpy, scipy).
+```
+lib/plotly.min.js     una sola copia de la librería de dibujo (4,7 MB)
+css/factiun.css       base del tema, común a todos los visores
+index.html            portada
+ayora/                index.html · css/style.css · js/{app,data}.js · tools/
+san-jose/             index.html · js/{app,data}.js · tools/
+```
 
-## Despliegue (URL)
-GitHub Pages: https://imoriana3.github.io/visor-san-jose/ · `.nojekyll` incluido para servir todo tal cual. Source: *Deploy from a branch* → `main` / `/ (root)`.
+Cada visor trae sus datos ya resueltos en `js/data.js` y el generador que los produce en `<planta>/tools/`. Para regenerarlos: `cd <planta>/tools && python3 generate_data.py`.
+
+## Por qué un solo repositorio
+Los visores comparten tema y librería: con uno por planta, cada uno arrastraba su propia copia de Plotly (4,7 MB idénticos) y su duplicado del CSS, y cualquier retoque del tema había que repetirlo. Los datos, que sí son propios de cada planta, siguen separados por carpeta.
+
+## Despliegue
+GitHub Pages: https://imoriana3.github.io/visores/ · `.nojekyll` incluido. Source: *Deploy from a branch* → `main` / `/ (root)`.
 
 ## Notas
-- Cliente: **Acciona** (PSFV San José, Aragón).
-- Geometría: cada tracker es bifila (2 filas a 6,2 m en X, 2 mesas, 8 esquinas). Asignación original validada geométricamente (ancho 6,16 m ± 8 cm, mesa ~36 m).
-- Para regenerar `js/data.js`: `cd tools && python3 generate_data.py` con los CSV de `tools/source/`.
-- Los puntos editados se resaltan en **ámbar**; el seleccionado, en **cian**.
+- Sin servidor y sin red: los datos y la librería se cargan como `<script>`, no por `fetch`.
+- El tema se toca en `css/factiun.css`; lo propio de cada visor va en `<planta>/css/style.css`.
 
 *Factiun · proyecto interno.*

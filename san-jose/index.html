@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0B0F14">
+<title>Visor San José — Editor puntos–tracker</title>
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/factiun.css">
+</head>
+<body>
+<header class="app-bar">
+  <a class="back" href="https://imoriana3.github.io/proyectos/">← Panel</a>
+  <h1>Visor San José</h1>
+  <span class="sub">Editor puntos → tracker · San José (Aragón)</span>
+  <span class="client">Acciona</span>
+  <span class="brand">Factiun</span>
+</header>
+<div id="app">
+  <aside id="panel">
+    <h1><span class="pin">◢</span> SAN JOSÉ · Editor</h1>
+    <div class="sub">Asignación puntos → tracker. Filtra, revisa y reasigna para completar trackers. 18.190 pts · 2.289 trk · 21 NCU.</div>
+
+    <div class="grp">
+      <label class="cap">Filtrar por NCU</label>
+      <select id="ncuSel"></select>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Filtrar por estado del tracker</label>
+      <select id="statusSel">
+        <option value="all">Todos</option>
+        <option value="OK">Completos (8 pts, 2 de cada esquina)</option>
+        <option value="no">No completos (todo lo demás)</option>
+        <option value="INCOMPLETO">Incompletos</option>
+        <option value="REVISAR">A revisar (filas no cuadran)</option>
+        <option value="SIN_PUNTOS">Sin puntos</option>
+      </select>
+      <div id="counts"></div>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Color de los puntos</label>
+      <div class="radio">
+        <label><input type="radio" name="mode" value="tracker" checked><span>Tracker</span></label>
+        <label><input type="radio" name="mode" value="ncu"><span>NCU</span></label>
+        <label><input type="radio" name="mode" value="estado"><span>Estado</span></label>
+      </div>
+      <div id="modeLegend" style="margin-top:9px"></div>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Capas</label>
+      <label class="chk"><input type="checkbox" id="chkMotors" checked> Motores (rombos, por NCU)</label>
+      <label class="chk"><input type="checkbox" id="chkUnassigned" checked> Sin asignar (cuadrados)</label>
+      <div class="shapes" style="margin-top:8px">
+        <div><span class="m">●</span> asignado</div>
+        <div><span class="m">■</span> sin asignar</div>
+        <div><span class="m">◆</span> motor (NCU)</div>
+        <div><span class="m" style="color:var(--edit)">○</span> editado</div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Editar asignación</label>
+      <div id="editBox">
+        <div id="selInfo">Haz clic en un punto para seleccionarlo.</div>
+        <label class="cap" style="margin-bottom:4px">Tracker destino</label>
+        <div class="row">
+          <input type="text" id="targetTrk" placeholder="TR-01_1-001" class="mono">
+          <button class="btn cyan" id="assignBtn">Asignar</button>
+        </div>
+        <p class="hint">O con un punto elegido, haz clic en el rombo (motor) del tracker destino.</p>
+        <div class="row" style="margin-top:8px">
+          <button class="btn ghost" id="unassignBtn" style="flex:1">Sin asignar</button>
+          <button class="btn ghost" id="clearSelBtn" style="flex:1">Deseleccionar</button>
+        </div>
+        <div id="editCount">0 ediciones</div>
+      </div>
+      <div class="row" style="margin-top:9px">
+        <button class="btn ghost" id="undoBtn" style="flex:1">↶ Deshacer</button>
+        <button class="btn ghost" id="resetEditsBtn" style="flex:1">Revertir todo</button>
+      </div>
+      <button class="btn" id="exportBtn" style="width:100%;margin-top:8px">↓ Exportar CSV editado</button>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Buscar tracker</label>
+      <div class="row">
+        <input type="text" id="search" placeholder="TR-21_1-045" class="mono">
+        <button class="btn ghost" id="goBtn">Ir</button>
+      </div>
+      <div class="msg" id="searchMsg"></div>
+      <div class="row" style="margin-top:8px"><button class="btn ghost" id="resetBtn" style="flex:1">Ver todo</button></div>
+      <div id="stats" style="margin-top:10px"></div>
+    </div>
+
+    <div class="grp">
+      <details><summary>Leyenda colores NCU</summary><div id="ncuLegend" style="margin-top:10px"></div></details>
+      <div class="foot">Rueda = zoom · arrastrar = pan · Esc = deseleccionar. Los puntos editados se rodean en ámbar.</div>
+    </div>
+  </aside>
+  <main id="plotwrap"><div id="plot"></div><div id="flash"></div></main>
+</div>
+<footer class="app-foot">Factiun · Visor San José — <a href="https://imoriana3.github.io/proyectos/">Panel de Proyectos</a></footer>
+<script src="../lib/plotly.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

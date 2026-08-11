@@ -378,6 +378,12 @@ function pintaMetricas() {
   document.getElementById('viewHelp').textContent = MODES[ui.view].help;
 }
 document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('change', e => {
+  /* "Asignación" no es una métrica: es la herramienta con la que se casan los
+     puntos del levantamiento con su seguidor. Vive en la misma pantalla y en el
+     mismo menú —antes era otra aplicación con otros menús— y solo aparece en las
+     plantas que todavía tienen puntos por asignar. */
+  if (e.target.value === 'edit') { document.body.classList.add('modo-editor'); return; }
+  document.body.classList.remove('modo-editor');
   ui.view = e.target.value;
   ui.soloArt = (ui.view === 'art'); document.getElementById('chkArt').checked = ui.soloArt;
   document.getElementById('chkPts').checked = ui.pts = (ui.view === 'pts');

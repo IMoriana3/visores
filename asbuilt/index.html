@@ -24,6 +24,12 @@
   <span class="brand">Factiun</span>
 </header>
 
+<style>
+  /* el editor ocupa el mismo hueco que la gráfica: mismo menú, misma pantalla */
+  #editor{position:absolute;inset:0;width:100%;height:100%;border:0;display:none;background:#0B0F14}
+  body.modo-editor #plot{visibility:hidden}
+  body.modo-editor #editor{display:block}
+</style>
 <div id="app">
   <aside id="panel">
     <h1><span class="pin">◢</span> <span id="hdrPlanta">AYORA</span> · As-built</h1>
@@ -36,6 +42,7 @@
         <label><input type="radio" name="view" value="art"><span>Articuladas</span></label>
         <label><input type="radio" name="view" value="asb"><span>As-built vs proyecto</span></label>
         <label><input type="radio" name="view" value="pts"><span>Puntos</span></label>
+        <label id="lblEdit" style="display:none"><input type="radio" name="view" value="edit"><span>Asignación (editor)</span></label>
       </div>
       <p class="hint" id="viewHelp"></p>
     </div>
@@ -126,5 +133,21 @@
     if(pm)pm.textContent=(m.planta||'')+' · '+(m.codigo||'')+' · '+(m.n_pts||0).toLocaleString('es')+' puntos de levantamiento';})();
  </script>
  <script src="js/app.js"></script>
+<script>
+  /* Plantas cuyo levantamiento aún se está casando: se les ofrece el editor
+     como una vista más. Ayora lo tiene cerrado, así que ni aparece. */
+  (function(){
+    var EDITOR={sanjose:'../san-jose/'};
+    var url=EDITOR[PLANTA];if(!url)return;
+    var lbl=document.getElementById('lblEdit');if(lbl)lbl.style.display='';
+    var host=document.getElementById('plot');if(!host||!host.parentNode)return;
+    var f=document.createElement('iframe');f.id='editor';f.title='Editor de asignación';
+    host.parentNode.style.position=host.parentNode.style.position||'relative';
+    host.parentNode.appendChild(f);
+    document.querySelector('input[name=view][value=edit]').addEventListener('change',function(){
+      if(!f.src)f.src=url;   // se carga la primera vez que se pide
+    });
+  })();
+</script>
 </body>
 </html>

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0B0F14">
+<title>As-built de módulos — Factiun</title>
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/factiun.css">
+<link rel="stylesheet" href="../ayora/css/style.css">
+</head>
+<body>
+<header class="app-bar">
+  <a class="back" href="https://imoriana3.github.io/proyectos/">← Panel</a>
+  <h1>As-built de módulos</h1>
+  <span class="sub">Geometría medida de los seguidores · configuración de backtracking 3D</span>
+  <select id="plantaSel" class="client" style="background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--text);padding:4px 8px;font:inherit">
+    <option value="ayora">Ayora · 24025 · Valencia</option>
+    <option value="sanjose">San José · 24019 · Arequipa</option>
+  </select>
+  <span class="brand">Factiun</span>
+</header>
+
+<div id="app">
+  <aside id="panel">
+    <h1><span class="pin">◢</span> <span id="hdrPlanta">AYORA</span> · As-built</h1>
+    <div class="sub" id="hdrSub">754 bifilas · 1.508 filas · 3.069 puntos de levantamiento.</div>
+
+    <div class="grp">
+      <label class="cap">Vista</label>
+      <div class="radio vstack">
+        <label><input type="radio" name="view" value="bt3d" checked><span>Backtracking 3D</span></label>
+        <label><input type="radio" name="view" value="art"><span>Articuladas</span></label>
+        <label><input type="radio" name="view" value="asb"><span>As-built vs proyecto</span></label>
+        <label><input type="radio" name="view" value="pts"><span>Puntos</span></label>
+      </div>
+      <p class="hint" id="viewHelp"></p>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Colorear por</label>
+      <select id="metricSel"></select>
+      <div id="legend"></div>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Filtros</label>
+      <select id="zonaSel" style="margin-bottom:7px">
+        <option value="all">Todas las zonas</option>
+        <option value="HD">Zona HD</option>
+        <option value="PD">Zona PD</option>
+      </select>
+      <select id="tipoSel" style="margin-bottom:7px">
+        <option value="all">Todos los tipos</option>
+        <option value="2TTx56">2TTx56 · 4 strings</option>
+        <option value="2TTx42">2TTx42 · 3 strings</option>
+        <option value="2TTx28">2TTx28 · 2 strings</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="chkArt"> Solo articuladas <span id="nArt"></span></label>
+      <label class="chk"><input type="checkbox" id="chkAnom"> Solo sector anómalo</label>
+      <div id="counts"></div>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Capas</label>
+      <label class="chk"><input type="checkbox" id="chkFilas" checked> Filas (segmentos del eje)</label>
+      <label class="chk"><input type="checkbox" id="chkMot"> Motores (rombos)</label>
+      <label class="chk"><input type="checkbox" id="chkPts"> Puntos del levantamiento</label>
+      <label class="chk"><input type="checkbox" id="chkVec"> Vecinas de la fila elegida</label>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Fila seleccionada</label>
+      <div id="ficha">Haz clic en una fila del mapa.</div>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Exportar</label>
+      <div class="row">
+        <button class="btn" id="expBt3d" style="flex:1">Config. BT3D</button>
+        <button class="btn ghost" id="expView" style="flex:1">Vista actual</button>
+      </div>
+      <p class="hint">CSV en formato Excel español (<span class="mono">;</span> y coma decimal), UTF-8 con BOM.</p>
+    </div>
+
+    <div class="grp">
+      <label class="cap">Resumen</label>
+      <div id="stats"></div>
+    </div>
+
+    <details>
+      <summary>Notas</summary>
+      <p class="foot" id="notas"></p>
+    </details>
+  </aside>
+
+  <div id="plotwrap">
+    <div id="plot"></div>
+    <div id="flash"></div>
+  </div>
+</div>
+
+<footer class="app-foot">
+  As-built de módulos · <span id="pieMeta"></span> · <a href="https://github.com/imoriana3/visores">repositorio</a> · Factiun
+</footer>
+
+<script src="../lib/plotly.min.js"></script>
+<script>
+  /* ?planta=ayora|sanjose — una sola app para todas las plantas medidas */
+  var PLANTA=(function(){try{var p=new URLSearchParams(location.search).get('planta');return (p==='sanjose'||p==='san-jose')?'sanjose':'ayora';}catch(e){return 'ayora';}})();
+  document.write('<scr'+'ipt src="data/'+PLANTA+'.js"></scr'+'ipt>');
+ </script>
+<script>
+  (function(){var s=document.getElementById('plantaSel');if(!s)return;s.value=PLANTA;
+    s.onchange=function(){var u=new URL(location.href);u.searchParams.set('planta',this.value);location.href=u.href;};
+    var h=document.getElementById('hdrPlanta');
+    if(h&&window.DATA&&DATA.meta)h.textContent=String(DATA.meta.planta||'').toUpperCase();
+    document.title=(window.DATA&&DATA.meta?DATA.meta.planta+' — ':'')+'As-built de módulos';
+    /* los textos que antes iban fijos a Ayora salen ahora del propio dato */
+    var m=window.DATA&&DATA.meta||{};
+    var na=document.getElementById('nArt');if(na)na.textContent=m.n_art?('('+m.n_art+' filas)'):'(ninguna medida)';
+    var pm=document.getElementById('pieMeta');
+    if(pm)pm.textContent=(m.planta||'')+' · '+(m.codigo||'')+' · '+(m.n_pts||0).toLocaleString('es')+' puntos de levantamiento';})();
+ </script>
+ <script src="js/app.js"></script>
+</body>
+</html>

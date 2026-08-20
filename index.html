@@ -12,7 +12,9 @@
 <link rel="stylesheet" href="css/factiun.css">
 <style>
   body{display:block;overflow-y:auto}
-  main{max-width:860px;margin:0 auto;padding:34px 20px 60px}
+  /* La rejilla de visores es de tarjetas de 320 px minimo: con el tope en 860 px se quedaba en
+     dos columnas y 550 px muertos a cada lado en una pantalla de 1920. */
+  main{max-width:min(2560px,94vw);margin:0 auto;padding:34px 20px 60px}
   .lead{color:var(--muted);font-size:14px;line-height:1.65;margin:0 0 28px;max-width:62ch}
   .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
   .card{display:block;text-decoration:none;background:linear-gradient(180deg,var(--panel),var(--panel-2));

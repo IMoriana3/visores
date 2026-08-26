@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0B0F14">
-<title>As-built de módulos — Factiun</title>
+<title>Visor as-built — Factiun</title>
 <link rel="icon" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -125,7 +125,10 @@
     s.onchange=function(){var u=new URL(location.href);u.searchParams.set('planta',this.value);location.href=u.href;};
     var h=document.getElementById('hdrPlanta');
     if(h&&window.DATA&&DATA.meta)h.textContent=String(DATA.meta.planta||'').toUpperCase();
-    document.title=(window.DATA&&DATA.meta?DATA.meta.planta+' — ':'')+'As-built de módulos';
+    /* Cada ?planta llega desde una tarjeta distinta del panel: la pestaña dice
+       el nombre de ESA tarjeta, para poder distinguir las dos abiertas a la vez. */
+    var TITULOS={sanjose:'Visor de levantamiento · San José',ayora:'Visor de geometría as-built · Ayora'};
+    document.title=(TITULOS[PLANTA]||'Visor as-built')+' — Factiun';
     /* los textos que antes iban fijos a Ayora salen ahora del propio dato */
     var m=window.DATA&&DATA.meta||{};
     var na=document.getElementById('nArt');if(na)na.textContent=m.n_art?('('+m.n_art+' filas)'):'(ninguna medida)';

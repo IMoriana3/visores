@@ -41,10 +41,18 @@ const EXT_TXT = ['Sur', 'Norte', 'Motor'];
    traiga el campo se pinta todo «medido», que es lo que se decía antes. */
 const OG_HAY = Array.isArray(F.oi) && F.oi.length === NF;
 const OG_F   = OG_HAY ? F.oi : new Array(NF).fill(0);
-const OG_TXT = ['Medido', 'Una punta repuesta', 'Las dos cotas repuestas',
-                'Viga duplicada de su hermana', 'Reconstruido del plano'];
+// LO QUE NO ES MEDIDA ES LA COTA, NO LA VIGA: de las 52 de San José, 46 tienen
+// sus cuatro puntos y se dibujan donde el topógrafo las midió; lo que se les
+// repone es la altura, porque vino en otra referencia vertical (+36,6 m).
+// Solo 6 vigas (3 seguidores) no tienen puntos: las del plano y dos copias.
+const OG_TXT = ['Cotas medidas', 'Una cota repuesta (otra referencia vertical)', 'Las dos cotas repuestas (otra referencia)',
+                'Cota copiada de su hermana', 'Sin levantar: geometría del plano'];
 const OG_COL = ['#3d5566', '#ffb02e', '#e8d44d', '#ff3ea5', '#f5762a'];
 const OG_N   = [0, 1, 2, 3, 4].map(k => OG_F.reduce((a, v) => a + (v === k ? 1 : 0), 0));
+// y cuántas de esas vigas no tienen NI UN punto del levantamiento — contado en
+// la nube, no deducido de la categoría: 7 de las 9 copias sí tienen sus puntos
+const OG_SIN_PTS = (() => { const h = new Uint8Array(NF); for (const f of P.f) h[f] = 1;
+  let c = 0; for (let i = 0; i < NF; i++) if (OG_F[i] && !h[i]) c++; return c; })();
 
 /* ---------------- métricas por vista ---------------- */
 const MODES = {
@@ -61,7 +69,7 @@ const MODES = {
       { k: 'ae', t: 'Azimut de máxima pendiente · este', azi: true },
       { k: 'tp', t: 'Tipo de seguidor', cat: 'tp' },
       { k: 'rvf', t: 'Cota con otra referencia', cat: 'rvf' },
-    ].concat(OG_HAY ? [{ k: 'oi', t: 'Origen del dato de la viga', cat: 'og' }] : [])
+    ].concat(OG_HAY ? [{ k: 'oi', t: 'Origen de la cota de la viga', cat: 'og' }] : [])
   },
   art: {
     help: 'Las bifilas articuladas de la planta (' + (MET.n_art_trk || 0) + ' seguidores, ' + (MET.n_art || 0) + ' filas). El quiebro es dato medido en el motor: las demás filas son vigas rígidas.',
@@ -276,6 +284,11 @@ function trazaPuntos(idxs) {
    a la vista sin tener que saber qué métrica elegir. */
 function trazaRV(idxs) {
   if (!RV_HAY || !RV_N || !ui.rv) return [];
+  // Coloreando por ORIGEN esta capa sobra y estorba: el origen ya dice en qué
+  // filas se repuso una cota (y por qué), y su magenta pintado encima con
+  // trazo grueso tapaba los cuatro colores — se veía todo «duplicada». Medido
+  // en Chromium: 46 de las 52 filas no medidas quedaban cubiertas.
+  if (ui.metric === 'oi') return [];
   const x = [], y = [];
   for (const i of idxs) {
     if (!RV_F[i]) continue;
@@ -517,7 +530,7 @@ document.getElementById('notas').innerHTML =
 /* y lo mismo con lo que no es medida: la casilla solo si hay algo que aislar */
 if (OG_HAY && OG_N[0] < NF) {
   document.getElementById('lblOG').hidden = false;
-  document.getElementById('nOG').textContent = '(' + (NF - OG_N[0]) + ' vigas)';
+  document.getElementById('nOG').textContent = '(' + (NF - OG_N[0]) + ' vigas · ' + OG_SIN_PTS + ' sin sus puntos)';
 }
 if (RV_HAY && RV_N) {
   document.getElementById('lblRV').hidden = false;

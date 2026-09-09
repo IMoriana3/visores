@@ -14,6 +14,12 @@ Esto lo deriva:
                             (cobertura-zigbee tools/reparte_levantamiento.py) que
                             usa el simulador: un reparto, un dibujo.
   shear.csv             ->  cizallado por seguidor (diferencia entre sus dos filas).
+  sanjose_cotas.json    ->  de dónde sale la geometría de cada viga en el MODELO
+                            (medida · una punta repuesta · duplicada de su
+                            hermana · reconstruida del plano), que es lo que
+                            distingue en el mapa una viga levantada de una
+                            supuesta. Sale de cobertura-zigbee
+                            tools/cotas_asbuilt.py, el mismo que come el 3D.
 
 DE DÓNDE VENÍA Y POR QUÉ SE CAMBIA. Hasta aquí esto leía `final_v2_labeled.csv`,
 la asignación punto↔tracker que vino del proveedor. Esa asignación tenía 93
@@ -30,9 +36,10 @@ el punto de un tope medido una sola vez entre los dos tubos que se encuentran
 ahí. Contra lo que había: 4.421 -> 4.449 filas, 2.134 -> 2.162 trackers con las
 dos vigas, 153 -> 125 con una sola, y ninguna fila emitida a media longitud.
 
-Salida: ../js/data.js con el esquema de Ayora (los campos que San José no puede
-tener todavía —articulaciones, motores medidos— van vacíos, y el visor ya los
-trata como "sin dato").
+Salida: ../../asbuilt/data/sanjose.js — el fichero que CARGA asbuilt/index.html,
+con el esquema de Ayora (los campos que San José no puede tener todavía
+—articulaciones, motores medidos— van vacíos, y el visor ya los trata como
+"sin dato").
 
 Uso:  cd san-jose/tools && python3 generate_asbuilt.py
 """
@@ -40,9 +47,24 @@ import os, csv, json, math, collections, statistics, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC  = os.path.join(HERE, 'source')
-OUT  = os.path.join(HERE, '..', 'js', 'data_asbuilt.js')
+# EL FICHERO QUE SIRVE LA PÁGINA, no una copia suya. Esto escribía en
+# san-jose/js/data_asbuilt.js, que no lo carga NADIE: la página del as-built es
+# asbuilt/index.html y lee asbuilt/data/<planta>.js. Los dos se separaron y el
+# visor se quedó sirviendo 4.491 filas de una versión vieja mientras el
+# generador decía «OK» sobre el fichero muerto. Una sola salida, la de verdad.
+OUT  = os.path.join(HERE, '..', '..', 'asbuilt', 'data', 'sanjose.js')
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'asbuilt', 'tools'))
 import ref_vertical                                    # mismo criterio que Ayora
+
+
+# de dónde sale la geometría de cada viga, en el mismo orden que el código `oi`
+OG_TXT = ['medido',
+          'una punta repuesta: su cota vino con otra referencia vertical y se toma del terreno vecino '
+          '(la otra punta, la posición y el largo son medida)',
+          'las DOS cotas repuestas del terreno vecino: las cuatro puntas vinieron con otra referencia '
+          'vertical — la posición y el largo siguen siendo medida',
+          'viga DUPLICADA de su hermana: este seguidor se levantó a medias y esta viga no tiene ninguna punta medida',
+          'seguidor RECONSTRUIDO del plano: no se levantó — geometría del layout y cota del terreno vecino']
 
 
 def rd(name):
@@ -60,6 +82,19 @@ def main():
     with open(os.path.join(SRC, 'sanjose_puntos.json'), encoding='utf-8') as f:
         NB = json.load(f)
     shear = {r['tid']: float(r['shear']) for r in rd('shear.csv') if r.get('shear') not in (None, '')}
+    # DE DÓNDE SALE CADA VIGA EN EL MODELO. El as-built del reparto trae la
+    # geometría medida; el que decide qué cota es medida y qué cota se repone
+    # es `cotas_asbuilt.py`, y eso vive en sanjose_cotas.json. Sin cruzarlos, el
+    # visor pintaba igual una viga con sus cuatro puntas medidas y una copiada
+    # de su hermana, que es justo lo que hay que poder distinguir.
+    #   0 medida · 1 una punta repuesta del terreno vecino · 2 las dos cotas
+    #   repuestas (posición y largo medidos) · 3 viga DUPLICADA de su hermana ·
+    #   4 seguidor RECONSTRUIDO del plano
+    CO = None
+    _co = os.path.join(SRC, 'sanjose_cotas.json')
+    if os.path.exists(_co):
+        with open(_co, encoding='utf-8') as f:
+            CO = json.load(f)
 
     # El as-built del reparto va en el sistema LOCAL de la planta (cE/cN/base) y
     # su eje z apunta al SUR: zs = -n_sur. El visor dibuja en UTM absolutas, que
@@ -69,10 +104,55 @@ def main():
     for i in range(NB['n']):
         nPor[NB['filas'][NB['fi'][i]]].append(i)
 
+    # CRUCE AS-BUILT ↔ COTAS. Cada viga de cotas se busca en el as-built por
+    # (tracker, x). Las que aparecen se MARCAN con su origen; las que no —la
+    # hermana duplicada de un seguidor levantado a medias, y el seguidor entero
+    # que no se levantó— se AÑADEN, para que el mapa y la escena 3D dibujen la
+    # misma planta. Los reconstruidos no llevan tk (no se levantaron): esos se
+    # cruzan por geometría (misma x y solape en n).
+    ORI, EXTRA = {}, []
+    if CO:
+        porTk = collections.defaultdict(list)
+        for r in AB['f']:
+            porTk[r['tk']].append(r)
+        for ti, t in enumerate(CO['t']):
+            if not t:
+                continue
+            for f in t['f']:
+                og = (4 if t.get('est') else 3 if f.get('hm')
+                      else 2 if f.get('ye') == 3 else 1 if f.get('ye') else 0)
+                cand = [r for r in porTk.get(t.get('tk') or '', ()) if abs(r['x'] - f['x']) < 1.0]
+                if not cand and t.get('est'):
+                    cand = [r for r in AB['f'] if abs(r['x'] - f['x']) < 1.0
+                            and min(-r['zs'], -r['zn']) < max(f['n']) - 1
+                            and max(-r['zs'], -r['zn']) > min(f['n']) + 1]
+                if cand:
+                    ORI[cand[0]['id']] = og
+                    continue
+                # el seguidor reconstruido no tiene id de levantamiento (no se
+                # levantó): se le da uno propio, el mismo para sus dos vigas,
+                # para que en el visor sigan siendo UN seguidor
+                tk = t.get('tk') or 'TR-PLANO-%04d' % ti
+                EXTRA.append({'id': f.get('id') or tk, 'zo': t.get('zo') or 'SJ', 'tk': tk,
+                              'x': f['x'], 'zs': -f['n'][0], 'zn': -f['n'][1],
+                              'ys': f['y'][0], 'yn': f['y'][1],
+                              'zm': None, 'ym': None, 'mods': f.get('md'),
+                              'art': 0, 'pa': [], 'npt': 0, '_og': og})
+        # la pareja del reconstruido: la de más al este es la -E
+        for a in EXTRA:
+            if a['id'].endswith(('-E', '-W')):
+                continue
+            par = [b for b in EXTRA if b['tk'] == a['tk']]
+            a['id'] += '-E' if a['x'] >= max(b['x'] for b in par) else '-W'
+
     F = collections.defaultdict(list)
     idx, orden = {}, []
-    for r in AB['f']:
+    for r in list(AB['f']) + EXTRA:
         fid, tid, side = r['id'], r['tk'], r['id'].rsplit('-', 1)[1]
+        # una fila que el as-built midió y cotas NO conserva es una fila cuya
+        # cota vino con otra referencia vertical: el modelo la repone, así que
+        # tampoco puede pintarse como medida limpia
+        og = r.get('_og', ORI.get(fid, 0 if not CO else 3))
         # LOS EXTREMOS SON LOS EXTREMOS, NO LA MEDIA DE LAS ESQUINAS. En Ayora
         # una fila es UNA mesa y sus dos puntos son sus dos puntas, asi que
         # promediar da lo mismo. En San Jose la fila es un TUBO DE DOS MESAS de
@@ -98,7 +178,7 @@ def main():
         sl = ((z1 - z0) / L * 100) if L > 5 else None  # pendiente longitudinal (%)
         if sl is not None and abs(sl) > 15:            # 15% es ya un talud: es un punto mal asignado, no un seguidor
             sl = None
-        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ()))))
+        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ())), og))
 
     orden.sort(key=lambda t: (t[3], t[4]))              # de oeste a este, y de sur a norte
     for i, o in enumerate(orden):
@@ -134,7 +214,7 @@ def main():
         return (orden[i][6] + orden[i][7]) / 2
 
     for i, o in enumerate(orden):
-        fid, tid, side, x, y0, y1, z0, z1, sl, npts = o
+        fid, tid, side, x, y0, y1, z0, z1, sl, npts, og = o
         vo, ve = vecino[i]
         so = se = None
         if vo >= 0:
@@ -165,7 +245,11 @@ def main():
             F[k].append(None)
         F['tvo'].append(orden[vo][0] if vo >= 0 else '')
         F['tve'].append(orden[ve][0] if ve >= 0 else '')
-        F['og'].append('medido')
+        # ORIGEN DEL DATO DE ESTA VIGA, con su texto y su categoría. El visor
+        # ya enseñaba `og` en rojo cuando no es «medido»; `oi` es lo mismo en
+        # número, para poder pintarlo y filtrarlo en el mapa.
+        F['og'].append(OG_TXT[og])
+        F['oi'].append(og)
 
     # --- puntos del levantamiento -------------------------------------------
     # La nube ya viene en UTM absolutas y con su fila. El extremo (N/S) no lo

@@ -24,3 +24,36 @@ vacíos: la app lo dice («ninguna medida») en vez de fingir que valen cero.
 
 El **editor de asignación** de San José sigue donde estaba (`san-jose/`): es la
 herramienta de la fase anterior, la que produce el dato que aquí se muestra.
+
+## Cotas con otra referencia vertical
+
+`tools/ref_vertical.py` lo comparten los dos generadores, para que las dos plantas
+se midan con la misma vara. Marca las cotas entregadas en una referencia distinta a
+la del resto: en San José son **98 puntos en 54 filas**, todos positivos, **+36,55 m
+de media con σ 0,40** — la ondulación del geoide en Arequipa, o sea cota elipsoidal
+WGS84 colada entre ortométricas. En Ayora **ninguna**.
+
+Cada punto se compara con los de los seguidores **de al lado, a su misma coordenada
+norte**, no con una bola de radio fijo. El motivo es que el relieve real es
+*solidario*: un talud aparece igual en todos los seguidores de esa estación y al
+comparar lateralmente se cancela, mientras que una referencia distinta no. Con una
+bola de 40 m salían 7 falsos positivos en el borde sur de TR-07, que es un escalón
+real de ~3,5 m idéntico en 067-073.
+
+El umbral no es delicado: en San José hay una **banda vacía entre 5 y 20 m**, así que
+cualquier valor de 3 a 20 marca exactamente los mismos 98 puntos.
+
+Lo que sale de ahí, en el dato y en la app:
+
+| campo | qué es |
+|---|---|
+| `p.r` | por punto: `0` comprobado · `1` marcado · `2` sin vecinos para decidir |
+| `p.rd` | desvío del punto contra sus laterales (m) |
+| `f.rv` | cuántas cotas marcadas tiene esa fila |
+| `meta.n_rv`, `meta.n_rv_filas` | recuentos de planta |
+
+En pantalla: chip de recuento, filtro «Solo cota de otra referencia», capa de
+resalte encima de cualquier coloreado, métricas propias en las vistas de filas y de
+puntos, y el detalle con **id de punto y desvío** en la ficha de la fila. **No se
+corrigen**: se marcan, porque lo que toca es reclamárselas al topógrafo. Un punto
+que no se puede decidir no se declara limpio (en Ayora son el 23 %).

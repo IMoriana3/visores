@@ -49,6 +49,10 @@ const OG_TXT = ['Cotas medidas', 'Una cota repuesta (otra referencia vertical)',
                 'Cota copiada de su hermana', 'Sin levantar: geometría del plano'];
 const OG_COL = ['#3d5566', '#ffb02e', '#e8d44d', '#ff3ea5', '#f5762a'];
 const OG_N   = [0, 1, 2, 3, 4].map(k => OG_F.reduce((a, v) => a + (v === k ? 1 : 0), 0));
+// y cuántas de esas vigas no tienen NI UN punto del levantamiento — contado en
+// la nube, no deducido de la categoría: 7 de las 9 copias sí tienen sus puntos
+const OG_SIN_PTS = (() => { const h = new Uint8Array(NF); for (const f of P.f) h[f] = 1;
+  let c = 0; for (let i = 0; i < NF; i++) if (OG_F[i] && !h[i]) c++; return c; })();
 
 /* ---------------- métricas por vista ---------------- */
 const MODES = {
@@ -526,7 +530,7 @@ document.getElementById('notas').innerHTML =
 /* y lo mismo con lo que no es medida: la casilla solo si hay algo que aislar */
 if (OG_HAY && OG_N[0] < NF) {
   document.getElementById('lblOG').hidden = false;
-  document.getElementById('nOG').textContent = '(' + (NF - OG_N[0]) + ' vigas · ' + (OG_N[3] + OG_N[4]) + ' sin sus puntos)';
+  document.getElementById('nOG').textContent = '(' + (NF - OG_N[0]) + ' vigas · ' + OG_SIN_PTS + ' sin sus puntos)';
 }
 if (RV_HAY && RV_N) {
   document.getElementById('lblRV').hidden = false;

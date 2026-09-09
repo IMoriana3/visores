@@ -31,8 +31,36 @@ SRC  = os.path.join(HERE, 'source')
 OUT  = os.path.join(HERE, '..', 'js', 'data.js')
 BIFILA = 6.2  # separación entre filas de la bifila (m)
 
+def leva():
+    """El levantamiento CRUDO del topógrafo: id, X, Y, Z, sin tocar."""
+    f = os.path.join(SRC, 'sanjose_levantamiento.csv')
+    if not os.path.exists(f):
+        return None
+    d = pd.read_csv(f, header=None, usecols=[0, 1, 2, 3], names=['id', 'X', 'Y', 'Z'])
+    return d.dropna(subset=['id']).astype({'id': int})
+
+
 def main():
     final  = pd.read_csv(os.path.join(SRC, 'final_v2_labeled.csv'))
+    # LOS PUNTOS SON LOS DEL TOPÓGRAFO, NO LOS QUE LA ASIGNACIÓN QUISO MIRAR.
+    # final_v2_labeled.csv trae 18.190 puntos y el levantamiento 18.289: faltan
+    # 99, y no sueltos — 96 caen en una franja de 9 m en x (129-138) que recorre
+    # la planta entera de norte a sur, o sea DOS LÍNEAS DE VIGAS enteras. Esta
+    # página es el editor de la asignación, así que un punto que el topógrafo
+    # midió y la asignación no recogió es justo lo que hay que poder ver: entra
+    # como NO ASIGNADO, que es lo que es, y el editor ya sabe pintar esos (les
+    # busca su tracker más cercano). Antes no estaban de ninguna forma.
+    L = leva()
+    if L is not None:
+        faltan = L[~L.id.isin(final.id)].copy()
+        if len(faltan):
+            for c in final.columns:
+                if c not in faltan.columns:
+                    faltan[c] = np.nan
+            faltan['assigned'] = False
+            final = pd.concat([final, faltan[final.columns]], ignore_index=True)
+            print('levantamiento del topógrafo: %d puntos · la asignación traía %d · '
+                  '%d entran SIN ASIGNAR' % (len(L), len(L) - len(faltan), len(faltan)))
     master = pd.read_csv(os.path.join(SRC, 'tracker_master.csv')).reset_index(drop=True)
     shear  = pd.read_csv(os.path.join(SRC, 'shear.csv'))
 
@@ -49,6 +77,7 @@ def main():
     pne = final.Tracker_ID.map(tid2i).fillna(-1).astype(int).values.copy()
     if una.any():
         pne[np.where(una.values)[0]] = idx
+    orden_id = final.id.values.copy()          # el orden en que se calculó pne
 
     # --- estado por tracker ---
     asg = final[final.assigned]
@@ -105,7 +134,10 @@ def main():
     final['ci']    = final.corner.map(corner_code).fillna(-1).astype(int)
     final['mi']    = final.mesa.fillna(-1).astype(int)
     final['ncu_i'] = final.NCU.fillna(-1).astype(int)
-    pne_sorted = pd.Series(pne, index=pd.read_csv(os.path.join(SRC, 'final_v2_labeled.csv')).id.values).sort_index().values
+    # el índice es el de FINAL tal y como estaba al calcular pne (antes de
+    # ordenar), no el del CSV: desde que el levantamiento crudo aporta puntos
+    # que la asignación no tenía, releer el fichero daba un índice más corto
+    pne_sorted = pd.Series(pne, index=orden_id).sort_index().values
 
     data = {
         'palette': PALETTE,

@@ -131,6 +131,7 @@ def main():
         pitch=round(pit[len(pit) // 2], 3),
         h_eje=0.829,
         azimut_eje=0.0014,
+        huso='30N',                 # Valencia; San José declara 19S (Arequipa)
     )
 
     data = dict(meta=meta, f=dict(F), m=dict(M), o=dict(O), p=dict(P))

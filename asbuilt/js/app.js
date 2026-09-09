@@ -1,6 +1,7 @@
 /* ============================================================================
- * Visor Ayora — geometría as-built de seguidores y configuración de backtracking 3D
- * Datos en window.DATA (js/data.js), generados por tools/generate_data.py.
+ * Visor de as-built — geometría medida de seguidores y configuración de backtracking 3D
+ * Datos en window.DATA (data/<planta>.js): Ayora por ayora/tools/generate_data.py,
+ * San José por san-jose/tools/generate_asbuilt.py. Mismo esquema para las dos.
  * ==========================================================================*/
 /* Una sola app para el as-built de módulos de TODAS las plantas. Las que aún no
    tienen medidas ciertas piezas —San José no lleva articulaciones ni motores
@@ -11,6 +12,16 @@ const _vacio = n => { const o = {}; ['f','s','y0','y1','z0','z1','L','p','x','y'
 const M = (D.m && D.m.f) ? D.m : _vacio(0);
 const O = (D.o && D.o.x) ? D.o : _vacio((D.f && D.f.id) ? D.f.id.length : 0);
 const NF = F.id.length, NP = P.id.length;
+/* Los CSV se llamaban «ayora_...» pasara lo que pasara: herencia de cuando esto
+   era el visor de Ayora. Exportar San José y encontrarte un ayora_puntos.csv en
+   Descargas es de las cosas que acaban en el correo de un cliente. */
+/* El huso lo declara el generador de cada planta (meta.huso). Los ejes decían
+   «UTM 30N» siempre: Ayora lo es, pero San José está en Arequipa (19S), así que
+   la etiqueta afirmaba algo falso en una página que ve el cliente. Sin dato
+   declarado no se inventa — se dice «UTM» a secas. */
+const HUSO = MET.huso ? ('UTM ' + MET.huso) : 'UTM';
+const SLUG = (MET.planta || 'planta').toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const plotDiv = document.getElementById('plot');
 const EST_TXT = ['OK', 'Atención', 'Revisar', 'Sin dato'];
 const EST_COL = ['#36c275', '#e8d44d', '#f5762a', '#5a606b'];
@@ -33,7 +44,7 @@ const MODES = {
     ]
   },
   art: {
-    help: 'Las 17 bifilas articuladas (34 filas). El quiebro es dato medido en el motor: las demás filas son vigas rígidas.',
+    help: 'Las bifilas articuladas de la planta (' + (MET.n_art_trk || 0) + ' seguidores, ' + (MET.n_art || 0) + ' filas). El quiebro es dato medido en el motor: las demás filas son vigas rígidas.',
     metrics: [
       { k: 'ar', t: 'Articulada / rígida', cat: 'ar' },
       { k: 'dmot', t: 'Desplazamiento del motor (m)', div: true },
@@ -51,7 +62,7 @@ const MODES = {
     ]
   },
   pts: {
-    help: 'Los 3.069 puntos del levantamiento, ya asignados a fila y extremo. Solo consulta: la asignación está cerrada y verificada.',
+    help: 'Los ' + NP.toLocaleString('es-ES') + ' puntos del levantamiento, ya asignados a fila y extremo. Solo consulta: la asignación está cerrada y verificada.',
     metrics: [
       { k: 'e', t: 'Extremo medido', cat: 'e' },
       { k: 'j', t: 'Junta compartida entre trackers', cat: 'j' },
@@ -236,8 +247,8 @@ function trazaSel() {
 function baseLayout() {
   const l = {
     paper_bgcolor: '#13151a', plot_bgcolor: '#0e1014', margin: { l: 62, r: 14, t: 14, b: 46 },
-    xaxis: { title: { text: 'X · UTM 30N (m)', font: { size: 11 } }, color: '#8b919c', gridcolor: '#20232b', zeroline: false, tickfont: { family: 'monospace', size: 10 } },
-    yaxis: { title: { text: 'Y · UTM 30N (m)', font: { size: 11 } }, color: '#8b919c', gridcolor: '#20232b', zeroline: false, scaleanchor: 'x', scaleratio: 1, tickfont: { family: 'monospace', size: 10 } },
+    xaxis: { title: { text: 'X · ' + HUSO + ' (m)', font: { size: 11 } }, color: '#8b919c', gridcolor: '#20232b', zeroline: false, tickfont: { family: 'monospace', size: 10 } },
+    yaxis: { title: { text: 'Y · ' + HUSO + ' (m)', font: { size: 11 } }, color: '#8b919c', gridcolor: '#20232b', zeroline: false, scaleanchor: 'x', scaleratio: 1, tickfont: { family: 'monospace', size: 10 } },
     showlegend: false, dragmode: 'pan', uirevision: String(uirev),
     hoverlabel: { bgcolor: '#1b1e26', bordercolor: '#3a3f4b', font: { family: 'monospace', size: 11, color: '#e8eaed' }, align: 'left' }
   };
@@ -344,23 +355,23 @@ function expBt3d() {
       F.se[i], F.me[i], F.ae[i], F.ve[i] >= 0 ? F.id[F.ve[i]] : '', F.he[i] ? 'SI' : 'NO',
       O.z[i], O.m[i] ? 'SI' : 'NO', F.og[i]];
   });
-  csv('ayora_config_bt3d.csv', cab, f);
+  csv(SLUG + '_config_bt3d.csv', cab, f);
 }
 function expVista() {
   if (ui.view === 'pts') {
     const s = new Set(idxsActuales), f = [];
     for (let k = 0; k < NP; k++) if (s.has(P.f[k])) f.push([P.id[k], P.x[k], P.y[k], P.z[k], F.id[P.f[k]], EXT_TXT[P.e[k]], P.j[k] ? 'SI' : 'NO']);
-    csv('ayora_puntos.csv', ['punto', 'x', 'y', 'z', 'fila', 'extremo', 'junta'], f);
+    csv(SLUG + '_puntos.csv', ['punto', 'x', 'y', 'z', 'fila', 'extremo', 'junta'], f);
   } else if (ui.view === 'art') {
     const f = [];
     for (const i of idxsActuales) {
       const ms = mesasDe.get(i); if (!ms) continue;
       for (const j of ms) f.push([F.id[i], M.s[j], M.y0[j], M.y1[j], M.z0[j], M.z1[j], M.L[j], M.p[j], O.z[i], O.d[i]]);
     }
-    csv('ayora_alas_articuladas.csv', ['fila', 'ala', 'y_ini', 'y_fin', 'z_ini', 'z_fin', 'longitud', 'pend_pct', 'z_motor', 'desplaz_motor'], f);
+    csv(SLUG + '_alas_articuladas.csv', ['fila', 'ala', 'y_ini', 'y_fin', 'z_ini', 'z_fin', 'longitud', 'pend_pct', 'z_motor', 'desplaz_motor'], f);
   } else {
     const f = idxsActuales.map(i => [F.id[i], F.tp[i], F.sl[i], F.pp[i], F.dp[i], EST_TXT[F.es[i]], F.an[i] ? 'SI' : 'NO']);
-    csv('ayora_asbuilt.csv', ['fila', 'tipo', 'pend_medida_pct', 'pend_proyecto_pct', 'delta_pct', 'estado', 'sector_anomalo'], f);
+    csv(SLUG + '_asbuilt.csv', ['fila', 'tipo', 'pend_medida_pct', 'pend_proyecto_pct', 'delta_pct', 'estado', 'sector_anomalo'], f);
   }
 }
 let flashT = null;

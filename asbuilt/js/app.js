@@ -34,6 +34,16 @@ const plotDiv = document.getElementById('plot');
 const EST_TXT = ['OK', 'Atención', 'Revisar', 'Sin dato'];
 const EST_COL = ['#36c275', '#e8d44d', '#f5762a', '#5a606b'];
 const EXT_TXT = ['Sur', 'Norte', 'Motor'];
+/* DE DÓNDE SALE LA GEOMETRÍA DE CADA VIGA (F.oi, que cruza el as-built con el
+   <planta>_cotas.json que come el simulador). Una viga COPIADA de su hermana o
+   un seguidor RECONSTRUIDO del plano no pueden pintarse igual que una medida:
+   el mapa es la prueba de lo que hay, y ahí hay una suposición. Un dato que no
+   traiga el campo se pinta todo «medido», que es lo que se decía antes. */
+const OG_HAY = Array.isArray(F.oi) && F.oi.length === NF;
+const OG_F   = OG_HAY ? F.oi : new Array(NF).fill(0);
+const OG_TXT = ['Medido', 'Una punta repuesta', 'Viga duplicada de su hermana', 'Reconstruido del plano'];
+const OG_COL = ['#3d5566', '#ffb02e', '#ff3ea5', '#f5762a'];
+const OG_N   = [0, 1, 2, 3].map(k => OG_F.reduce((a, v) => a + (v === k ? 1 : 0), 0));
 
 /* ---------------- métricas por vista ---------------- */
 const MODES = {
@@ -50,7 +60,7 @@ const MODES = {
       { k: 'ae', t: 'Azimut de máxima pendiente · este', azi: true },
       { k: 'tp', t: 'Tipo de seguidor', cat: 'tp' },
       { k: 'rvf', t: 'Cota con otra referencia', cat: 'rvf' },
-    ]
+    ].concat(OG_HAY ? [{ k: 'oi', t: 'Origen del dato de la viga', cat: 'og' }] : [])
   },
   art: {
     help: 'Las bifilas articuladas de la planta (' + (MET.n_art_trk || 0) + ' seguidores, ' + (MET.n_art || 0) + ' filas). El quiebro es dato medido en el motor: las demás filas son vigas rígidas.',
@@ -84,7 +94,7 @@ const MODES = {
 };
 
 let ui = { view: 'bt3d', metric: 'sl', zona: 'all', tipo: 'all', soloArt: false, soloAnom: false,
-           filas: true, mot: false, pts: false, vec: false, soloRV: false, rv: true };
+           filas: true, mot: false, pts: false, vec: false, soloRV: false, soloOG: false, rv: true };
 let sel = -1, uirev = 1, pendingRange = null;
 
 /* ---------------- valores derivados ---------------- */
@@ -125,7 +135,10 @@ const CATS = {
   rvf: { vals: [1, 0], cols: ['#ff3ea5', '#3d5566'],
          lbl: v => v ? 'Con cota de otra referencia' : 'Sin cotas sospechosas' },
   rvp: { vals: [1, 2, 0], cols: ['#ff3ea5', '#5a606b', '#4aa3b8'],
-         lbl: v => v === 1 ? 'Otra referencia vertical' : v === 2 ? 'Sin vecinos para decidir' : 'Comprobado' }
+         lbl: v => v === 1 ? 'Otra referencia vertical' : v === 2 ? 'Sin vecinos para decidir' : 'Comprobado' },
+  // lo que NO es medida, primero en la leyenda: es lo que se busca
+  og: { vals: [2, 3, 1, 0], cols: [OG_COL[2], OG_COL[3], OG_COL[1], OG_COL[0]],
+        lbl: v => OG_TXT[v] + ' (' + OG_N[v] + ')' }
 };
 
 /* ---------------- filtro ---------------- */
@@ -135,6 +148,7 @@ function pasa(i) {
   if (ui.soloArt && !F.ar[i]) return false;
   if (ui.soloAnom && !F.an[i]) return false;
   if (ui.soloRV && !RV_F[i]) return false;
+  if (ui.soloOG && !OG_F[i]) return false;   // deja solo las vigas que no son medida entera
   return true;
 }
 
@@ -143,7 +157,7 @@ function bins(k, idxs) {
   const m = MODES[ui.view].metrics.find(x => x.k === k) || {};
   if (m.cat) {
     const c = CATS[m.cat];
-    return { kind: 'cat', cat: c, key: (i) => (m.cat === 'e' ? P.e[i] : m.cat === 'j' ? P.j[i] : m.cat === 'rvp' ? (RV_PT ? RV_PT[i] : 2) : m.cat === 'rvf' ? (RV_F[i] ? 1 : 0) : F[k][i]) };
+    return { kind: 'cat', cat: c, key: (i) => (m.cat === 'e' ? P.e[i] : m.cat === 'j' ? P.j[i] : m.cat === 'rvp' ? (RV_PT ? RV_PT[i] : 2) : m.cat === 'rvf' ? (RV_F[i] ? 1 : 0) : m.cat === 'og' ? OG_F[i] : F[k][i]) };
   }
   if (m.azi) return { kind: 'azi' };
   let vs;
@@ -456,7 +470,7 @@ document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('c
 document.getElementById('metricSel').addEventListener('change', e => { ui.metric = e.target.value; render(); });
 document.getElementById('zonaSel').addEventListener('change', e => { ui.zona = e.target.value; render(); });
 document.getElementById('tipoSel').addEventListener('change', e => { ui.tipo = e.target.value; render(); });
-[['chkArt', 'soloArt'], ['chkAnom', 'soloAnom'], ['chkRV', 'soloRV'], ['chkCapaRV', 'rv'], ['chkFilas', 'filas'], ['chkMot', 'mot'], ['chkPts', 'pts'], ['chkVec', 'vec']]
+[['chkArt', 'soloArt'], ['chkAnom', 'soloAnom'], ['chkRV', 'soloRV'], ['chkOG', 'soloOG'], ['chkCapaRV', 'rv'], ['chkFilas', 'filas'], ['chkMot', 'mot'], ['chkPts', 'pts'], ['chkVec', 'vec']]
   .forEach(([id, k]) => document.getElementById(id).addEventListener('change', e => { ui[k] = e.target.checked; render(); }));
 document.getElementById('expBt3d').addEventListener('click', expBt3d);
 document.getElementById('expView').addEventListener('click', expVista);
@@ -499,6 +513,11 @@ document.getElementById('notas').innerHTML =
    : 'Las cotas se han contrastado contra sus vecinas laterales y <b>ninguna</b> viene en otra referencia vertical. ');
 /* La casilla de filtro solo aparece si hay algo que filtrar; el aviso de que se
    ha mirado y está limpio va en las notas, que es donde no estorba. */
+/* y lo mismo con lo que no es medida: la casilla solo si hay algo que aislar */
+if (OG_HAY && OG_N[0] < NF) {
+  document.getElementById('lblOG').hidden = false;
+  document.getElementById('nOG').textContent = '(' + (NF - OG_N[0]) + ' vigas)';
+}
 if (RV_HAY && RV_N) {
   document.getElementById('lblRV').hidden = false;
   document.getElementById('lblCapaRV').hidden = false;

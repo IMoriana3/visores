@@ -530,7 +530,10 @@ document.getElementById('notas').innerHTML =
 /* y lo mismo con lo que no es medida: la casilla solo si hay algo que aislar */
 if (OG_HAY && OG_N[0] < NF) {
   document.getElementById('lblOG').hidden = false;
-  document.getElementById('nOG').textContent = '(' + (NF - OG_N[0]) + ' vigas · ' + OG_SIN_PTS + ' sin sus puntos)';
+  // que se lea lo que es: NO hay seguidores sin medir fuera de los del plano.
+  // Casi todas estas vigas tienen sus cuatro puntos; lo repuesto es la ALTURA.
+  document.getElementById('nOG').textContent = '(' + (NF - OG_N[0]) + ' vigas: ' + (NF - OG_N[0] - OG_SIN_PTS) +
+    ' con sus puntos y la cota en otra referencia · ' + OG_SIN_PTS + ' de los ' + OG_SIN_PTS / 2 + ' seguidores sin levantar)';
 }
 if (RV_HAY && RV_N) {
   document.getElementById('lblRV').hidden = false;

@@ -276,6 +276,11 @@ function trazaPuntos(idxs) {
    a la vista sin tener que saber qué métrica elegir. */
 function trazaRV(idxs) {
   if (!RV_HAY || !RV_N || !ui.rv) return [];
+  // Coloreando por ORIGEN esta capa sobra y estorba: el origen ya dice en qué
+  // filas se repuso una cota (y por qué), y su magenta pintado encima con
+  // trazo grueso tapaba los cuatro colores — se veía todo «duplicada». Medido
+  // en Chromium: 46 de las 52 filas no medidas quedaban cubiertas.
+  if (ui.metric === 'oi') return [];
   const x = [], y = [];
   for (const i of idxs) {
     if (!RV_F[i]) continue;

@@ -41,9 +41,10 @@ const EXT_TXT = ['Sur', 'Norte', 'Motor'];
    traiga el campo se pinta todo «medido», que es lo que se decía antes. */
 const OG_HAY = Array.isArray(F.oi) && F.oi.length === NF;
 const OG_F   = OG_HAY ? F.oi : new Array(NF).fill(0);
-const OG_TXT = ['Medido', 'Una punta repuesta', 'Viga duplicada de su hermana', 'Reconstruido del plano'];
-const OG_COL = ['#3d5566', '#ffb02e', '#ff3ea5', '#f5762a'];
-const OG_N   = [0, 1, 2, 3].map(k => OG_F.reduce((a, v) => a + (v === k ? 1 : 0), 0));
+const OG_TXT = ['Medido', 'Una punta repuesta', 'Las dos cotas repuestas',
+                'Viga duplicada de su hermana', 'Reconstruido del plano'];
+const OG_COL = ['#3d5566', '#ffb02e', '#e8d44d', '#ff3ea5', '#f5762a'];
+const OG_N   = [0, 1, 2, 3, 4].map(k => OG_F.reduce((a, v) => a + (v === k ? 1 : 0), 0));
 
 /* ---------------- métricas por vista ---------------- */
 const MODES = {
@@ -137,7 +138,7 @@ const CATS = {
   rvp: { vals: [1, 2, 0], cols: ['#ff3ea5', '#5a606b', '#4aa3b8'],
          lbl: v => v === 1 ? 'Otra referencia vertical' : v === 2 ? 'Sin vecinos para decidir' : 'Comprobado' },
   // lo que NO es medida, primero en la leyenda: es lo que se busca
-  og: { vals: [2, 3, 1, 0], cols: [OG_COL[2], OG_COL[3], OG_COL[1], OG_COL[0]],
+  og: { vals: [3, 4, 2, 1, 0], cols: [OG_COL[3], OG_COL[4], OG_COL[2], OG_COL[1], OG_COL[0]],
         lbl: v => OG_TXT[v] + ' (' + OG_N[v] + ')' }
 };
 

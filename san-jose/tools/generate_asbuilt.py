@@ -59,7 +59,10 @@ import ref_vertical                                    # mismo criterio que Ayor
 
 # de dónde sale la geometría de cada viga, en el mismo orden que el código `oi`
 OG_TXT = ['medido',
-          'una punta repuesta: su cota vino con otra referencia vertical y se toma del terreno vecino',
+          'una punta repuesta: su cota vino con otra referencia vertical y se toma del terreno vecino '
+          '(la otra punta, la posición y el largo son medida)',
+          'las DOS cotas repuestas del terreno vecino: las cuatro puntas vinieron con otra referencia '
+          'vertical — la posición y el largo siguen siendo medida',
           'viga DUPLICADA de su hermana: este seguidor se levantó a medias y esta viga no tiene ninguna punta medida',
           'seguidor RECONSTRUIDO del plano: no se levantó — geometría del layout y cota del terreno vecino']
 
@@ -84,8 +87,9 @@ def main():
     # es `cotas_asbuilt.py`, y eso vive en sanjose_cotas.json. Sin cruzarlos, el
     # visor pintaba igual una viga con sus cuatro puntas medidas y una copiada
     # de su hermana, que es justo lo que hay que poder distinguir.
-    #   0 medida · 1 una punta repuesta del terreno vecino · 2 viga DUPLICADA de
-    #   su hermana · 3 seguidor RECONSTRUIDO del plano
+    #   0 medida · 1 una punta repuesta del terreno vecino · 2 las dos cotas
+    #   repuestas (posición y largo medidos) · 3 viga DUPLICADA de su hermana ·
+    #   4 seguidor RECONSTRUIDO del plano
     CO = None
     _co = os.path.join(SRC, 'sanjose_cotas.json')
     if os.path.exists(_co):
@@ -115,7 +119,8 @@ def main():
             if not t:
                 continue
             for f in t['f']:
-                og = 3 if t.get('est') else (2 if f.get('hm') else (1 if f.get('ye') else 0))
+                og = (4 if t.get('est') else 3 if f.get('hm')
+                      else 2 if f.get('ye') == 3 else 1 if f.get('ye') else 0)
                 cand = [r for r in porTk.get(t.get('tk') or '', ()) if abs(r['x'] - f['x']) < 1.0]
                 if not cand and t.get('est'):
                     cand = [r for r in AB['f'] if abs(r['x'] - f['x']) < 1.0
@@ -147,7 +152,7 @@ def main():
         # una fila que el as-built midió y cotas NO conserva es una fila cuya
         # cota vino con otra referencia vertical: el modelo la repone, así que
         # tampoco puede pintarse como medida limpia
-        og = r.get('_og', ORI.get(fid, 0 if not CO else 2))
+        og = r.get('_og', ORI.get(fid, 0 if not CO else 3))
         # LOS EXTREMOS SON LOS EXTREMOS, NO LA MEDIA DE LAS ESQUINAS. En Ayora
         # una fila es UNA mesa y sus dos puntos son sus dos puntas, asi que
         # promediar da lo mismo. En San Jose la fila es un TUBO DE DOS MESAS de

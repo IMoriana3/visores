@@ -1,6 +1,7 @@
 /* ============================================================================
- * Visor Ayora — geometría as-built de seguidores y configuración de backtracking 3D
- * Datos en window.DATA (js/data.js), generados por tools/generate_data.py.
+ * Visor de as-built — geometría medida de seguidores y configuración de backtracking 3D
+ * Datos en window.DATA (data/<planta>.js): Ayora por ayora/tools/generate_data.py,
+ * San José por san-jose/tools/generate_asbuilt.py. Mismo esquema para las dos.
  * ==========================================================================*/
 /* Una sola app para el as-built de módulos de TODAS las plantas. Las que aún no
    tienen medidas ciertas piezas —San José no lleva articulaciones ni motores
@@ -11,6 +12,24 @@ const _vacio = n => { const o = {}; ['f','s','y0','y1','z0','z1','L','p','x','y'
 const M = (D.m && D.m.f) ? D.m : _vacio(0);
 const O = (D.o && D.o.x) ? D.o : _vacio((D.f && D.f.id) ? D.f.id.length : 0);
 const NF = F.id.length, NP = P.id.length;
+/* Cotas con OTRA REFERENCIA VERTICAL (asbuilt/tools/ref_vertical.py). Un dato
+   viejo no las trae: entonces no se dibuja nada, en vez de pintar todo «limpio»
+   — que sería afirmar algo que no se ha comprobado. */
+const RV_HAY = Array.isArray(P.r) && P.r.length === NP;
+const RV_PT  = RV_HAY ? P.r : null;                    // 0 limpio · 1 marcado · 2 sin decidir
+const RV_D   = RV_HAY && Array.isArray(P.rd) ? P.rd : null;
+const RV_F   = (Array.isArray(F.rv) && F.rv.length === NF) ? F.rv : new Array(NF).fill(0);
+const RV_N   = RV_F.reduce((a, v) => a + (v ? 1 : 0), 0);
+/* Los CSV se llamaban «ayora_...» pasara lo que pasara: herencia de cuando esto
+   era el visor de Ayora. Exportar San José y encontrarte un ayora_puntos.csv en
+   Descargas es de las cosas que acaban en el correo de un cliente. */
+/* El huso lo declara el generador de cada planta (meta.huso). Los ejes decían
+   «UTM 30N» siempre: Ayora lo es, pero San José está en Arequipa (19S), así que
+   la etiqueta afirmaba algo falso en una página que ve el cliente. Sin dato
+   declarado no se inventa — se dice «UTM» a secas. */
+const HUSO = MET.huso ? ('UTM ' + MET.huso) : 'UTM';
+const SLUG = (MET.planta || 'planta').toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const plotDiv = document.getElementById('plot');
 const EST_TXT = ['OK', 'Atención', 'Revisar', 'Sin dato'];
 const EST_COL = ['#36c275', '#e8d44d', '#f5762a', '#5a606b'];
@@ -30,10 +49,11 @@ const MODES = {
       { k: 'ao', t: 'Azimut de máxima pendiente · oeste', azi: true },
       { k: 'ae', t: 'Azimut de máxima pendiente · este', azi: true },
       { k: 'tp', t: 'Tipo de seguidor', cat: 'tp' },
+      { k: 'rvf', t: 'Cota con otra referencia', cat: 'rvf' },
     ]
   },
   art: {
-    help: 'Las 17 bifilas articuladas (34 filas). El quiebro es dato medido en el motor: las demás filas son vigas rígidas.',
+    help: 'Las bifilas articuladas de la planta (' + (MET.n_art_trk || 0) + ' seguidores, ' + (MET.n_art || 0) + ' filas). El quiebro es dato medido en el motor: las demás filas son vigas rígidas.',
     metrics: [
       { k: 'ar', t: 'Articulada / rígida', cat: 'ar' },
       { k: 'dmot', t: 'Desplazamiento del motor (m)', div: true },
@@ -48,20 +68,23 @@ const MODES = {
       { k: 'es', t: 'Estado', cat: 'es' },
       { k: 'an', t: 'Sector anómalo', cat: 'an' },
       { k: 'pp', t: 'Pendiente de proyecto (%)', div: true },
+      { k: 'rvf', t: 'Cota con otra referencia', cat: 'rvf' },
     ]
   },
   pts: {
-    help: 'Los 3.069 puntos del levantamiento, ya asignados a fila y extremo. Solo consulta: la asignación está cerrada y verificada.',
+    help: 'Los ' + NP.toLocaleString('es-ES') + ' puntos del levantamiento, ya asignados a fila y extremo. Solo consulta: la asignación está cerrada y verificada.',
     metrics: [
       { k: 'e', t: 'Extremo medido', cat: 'e' },
       { k: 'j', t: 'Junta compartida entre trackers', cat: 'j' },
-      { k: 'z', t: 'Cota medida (m)', div: false },
+      { k: 'z', t: 'Cota medida (m)', div: false, pt: 'z' },
+      { k: 'rvp', t: 'Referencia vertical', cat: 'rvp' },
+      { k: 'rd', t: 'Desvío contra los laterales (m)', div: true, pt: 'rd' },
     ]
   }
 };
 
 let ui = { view: 'bt3d', metric: 'sl', zona: 'all', tipo: 'all', soloArt: false, soloAnom: false,
-           filas: true, mot: false, pts: false, vec: false };
+           filas: true, mot: false, pts: false, vec: false, soloRV: false, rv: true };
 let sel = -1, uirev = 1, pendingRange = null;
 
 /* ---------------- valores derivados ---------------- */
@@ -79,6 +102,7 @@ for (let i = 0; i < NF; i++) {
   if (ms && ms.length === 2) dmesa[i] = M.p[ms[1]] - M.p[ms[0]];
 }
 function val(k, i) {
+  if (k === 'rvf') return RV_F[i] ? 1 : 0;
   if (k === 'dOE') return dOE[i];
   if (k === 'dmot') return dmot[i];
   if (k === 'dmesa') return dmesa[i];
@@ -97,7 +121,11 @@ const CATS = {
   es: { vals: [0, 1, 2, 3], cols: EST_COL, lbl: v => EST_TXT[v] },
   an: { vals: [1, 0], cols: ['#dd6a4a', '#3d5566'], lbl: v => v ? 'Sector anómalo' : 'Resto' },
   e: { vals: [0, 1, 2], cols: ['#4aa3b8', '#a5d68a', '#f5a623'], lbl: v => EXT_TXT[v] },
-  j: { vals: [1, 0], cols: ['#c85ea8', '#4aa3b8'], lbl: v => v ? 'En junta' : 'Extremo libre' }
+  j: { vals: [1, 0], cols: ['#c85ea8', '#4aa3b8'], lbl: v => v ? 'En junta' : 'Extremo libre' },
+  rvf: { vals: [1, 0], cols: ['#ff3ea5', '#3d5566'],
+         lbl: v => v ? 'Con cota de otra referencia' : 'Sin cotas sospechosas' },
+  rvp: { vals: [1, 2, 0], cols: ['#ff3ea5', '#5a606b', '#4aa3b8'],
+         lbl: v => v === 1 ? 'Otra referencia vertical' : v === 2 ? 'Sin vecinos para decidir' : 'Comprobado' }
 };
 
 /* ---------------- filtro ---------------- */
@@ -106,6 +134,7 @@ function pasa(i) {
   if (ui.tipo !== 'all' && F.tp[i] !== ui.tipo) return false;
   if (ui.soloArt && !F.ar[i]) return false;
   if (ui.soloAnom && !F.an[i]) return false;
+  if (ui.soloRV && !RV_F[i]) return false;
   return true;
 }
 
@@ -114,15 +143,22 @@ function bins(k, idxs) {
   const m = MODES[ui.view].metrics.find(x => x.k === k) || {};
   if (m.cat) {
     const c = CATS[m.cat];
-    return { kind: 'cat', cat: c, key: (i) => (m.cat === 'e' ? P.e[i] : m.cat === 'j' ? P.j[i] : F[k][i]) };
+    return { kind: 'cat', cat: c, key: (i) => (m.cat === 'e' ? P.e[i] : m.cat === 'j' ? P.j[i] : m.cat === 'rvp' ? (RV_PT ? RV_PT[i] : 2) : m.cat === 'rvf' ? (RV_F[i] ? 1 : 0) : F[k][i]) };
   }
   if (m.azi) return { kind: 'azi' };
-  const vs = idxs.map(i => val(k, i)).filter(v => v != null && !isNaN(v));
+  let vs;
+  if (m.pt) {
+    const s2 = new Set(idxs), a = P[m.pt] || [];
+    vs = [];
+    for (let q = 0; q < NP; q++) if (s2.has(P.f[q]) && a[q] != null && !isNaN(a[q])) vs.push(a[q]);
+  } else {
+    vs = idxs.map(i => val(k, i)).filter(v => v != null && !isNaN(v));
+  }
   if (!vs.length) return { kind: 'none' };
   vs.sort((a, b) => a - b);
   const lo = vs[Math.floor(0.02 * vs.length)], hi = vs[Math.floor(0.98 * vs.length)];
-  if (m.div) { const a = Math.max(Math.abs(lo), Math.abs(hi)) || 1; return { kind: 'num', lo: -a, hi: a, pal: DIV }; }
-  return { kind: 'num', lo, hi, pal: SEQ };
+  if (m.div) { const a = Math.max(Math.abs(lo), Math.abs(hi)) || 1; return { kind: 'num', lo: -a, hi: a, pal: DIV, pt: m.pt }; }
+  return { kind: 'num', lo, hi, pal: SEQ, pt: m.pt };
 }
 function binOf(b, v) {
   if (v == null || isNaN(v)) return -1;
@@ -204,18 +240,35 @@ function trazaPuntos(idxs) {
     x.push(P.x[k]); y.push(P.y[k]);
     let col = '#8ab4d8';
     if (ui.view === 'pts') {
-      if (b.kind === 'cat') { const v = ui.metric === 'e' ? P.e[k] : P.j[k]; col = b.cat.cols[b.cat.vals.indexOf(v)] || '#555'; }
-      else if (b.kind === 'num') { const q = binOf(b, P.z[k]); col = q < 0 ? '#555' : b.pal[q]; }
+      if (b.kind === 'cat') { const v = ui.metric === 'e' ? P.e[k] : ui.metric === 'rvp' ? (RV_PT ? RV_PT[k] : 2) : P.j[k]; col = b.cat.cols[b.cat.vals.indexOf(v)] || '#555'; }
+      else if (b.kind === 'num') { const a = P[b.pt || 'z'] || P.z; const q = a[k] == null ? -1 : binOf(b, a[k]); col = q < 0 ? '#555' : b.pal[q]; }
     }
     c.push(col);
-    cd.push([P.id[k], F.id[P.f[k]], EXT_TXT[P.e[k]], fmt(P.z[k], 3), P.j[k] ? 'sí' : 'no']);
+    cd.push([P.id[k], F.id[P.f[k]], EXT_TXT[P.e[k]], fmt(P.z[k], 3), P.j[k] ? 'sí' : 'no',
+      !RV_HAY ? 'sin comprobar' : RV_PT[k] === 1 ? ('OTRA REFERENCIA · ' + (RV_D && RV_D[k] != null ? (RV_D[k] > 0 ? '+' : '') + RV_D[k].toFixed(1) + ' m' : '')) :
+      RV_PT[k] === 2 ? 'sin vecinos para decidir' : 'comprobada']);
   }
   return {
     type: 'scattergl', mode: 'markers', x, y, customdata: cd,
     marker: { size: 4, color: c, line: { width: 0 } },
     hovertemplate: 'Punto <b>%{customdata[0]}</b><br>fila %{customdata[1]} · extremo %{customdata[2]}<br>' +
-      'cota %{customdata[3]} m · junta %{customdata[4]}<extra></extra>', showlegend: false
+      'cota %{customdata[3]} m · junta %{customdata[4]}<br>referencia: %{customdata[5]}<extra></extra>', showlegend: false
   };
+}
+/* CAPA DE RESALTE. Colorear por «cota con otra referencia» no basta: 54 filas
+   entre 4.491 se pierden a escala de planta, y una marca que no se ve no marca.
+   Esta capa va ENCIMA de cualquier coloreado, con trazo grueso, para que salten
+   a la vista sin tener que saber qué métrica elegir. */
+function trazaRV(idxs) {
+  if (!RV_HAY || !RV_N || !ui.rv) return [];
+  const x = [], y = [];
+  for (const i of idxs) {
+    if (!RV_F[i]) continue;
+    x.push(F.x[i], F.x[i], NaN); y.push(F.y0[i], F.y1[i], NaN);
+  }
+  if (!x.length) return [];
+  return [{ type: 'scattergl', mode: 'lines', x, y,
+    line: { color: '#ff3ea5', width: 5 }, hoverinfo: 'skip', showlegend: false }];
 }
 function trazaSel() {
   if (sel < 0) return [];
@@ -236,8 +289,8 @@ function trazaSel() {
 function baseLayout() {
   const l = {
     paper_bgcolor: '#13151a', plot_bgcolor: '#0e1014', margin: { l: 62, r: 14, t: 14, b: 46 },
-    xaxis: { title: { text: 'X · UTM 30N (m)', font: { size: 11 } }, color: '#8b919c', gridcolor: '#20232b', zeroline: false, tickfont: { family: 'monospace', size: 10 } },
-    yaxis: { title: { text: 'Y · UTM 30N (m)', font: { size: 11 } }, color: '#8b919c', gridcolor: '#20232b', zeroline: false, scaleanchor: 'x', scaleratio: 1, tickfont: { family: 'monospace', size: 10 } },
+    xaxis: { title: { text: 'X · ' + HUSO + ' (m)', font: { size: 11 } }, color: '#8b919c', gridcolor: '#20232b', zeroline: false, tickfont: { family: 'monospace', size: 10 } },
+    yaxis: { title: { text: 'Y · ' + HUSO + ' (m)', font: { size: 11 } }, color: '#8b919c', gridcolor: '#20232b', zeroline: false, scaleanchor: 'x', scaleratio: 1, tickfont: { family: 'monospace', size: 10 } },
     showlegend: false, dragmode: 'pan', uirevision: String(uirev),
     hoverlabel: { bgcolor: '#1b1e26', bordercolor: '#3a3f4b', font: { family: 'monospace', size: 11, color: '#e8eaed' }, align: 'left' }
   };
@@ -253,6 +306,7 @@ function render() {
   if (ui.filas && ui.view !== 'pts') data.push(...trazasFilas(idxs, b));
   if (ui.view === 'pts' || ui.pts) data.push(trazaPuntos(idxs));
   if (ui.mot) data.push(trazaMotores(idxs));
+  data.push(...trazaRV(idxs));
   data.push(...trazaSel());
   if (ui.view !== 'pts') data.push(trazaHover(idxs));
   Plotly.react(plotDiv, data, baseLayout(), { responsive: true, scrollZoom: true, displayModeBar: false });
@@ -260,7 +314,9 @@ function render() {
   pintaStats(idxs);
   document.getElementById('counts').innerHTML =
     '<span class="pill" style="--c:#36c275">' + idxs.length + ' filas</span>' +
-    '<span class="pill" style="--c:#f5a623">' + idxs.filter(i => F.ar[i]).length + ' articuladas</span>';
+    '<span class="pill" style="--c:#f5a623">' + idxs.filter(i => F.ar[i]).length + ' articuladas</span>' +
+    (RV_HAY && RV_N ? '<span class="pill" style="--c:#ff3ea5">' + idxs.filter(i => RV_F[i]).length +
+       ' con cota de otra referencia</span>' : '');
 }
 function pintaLeyenda(b, idxs) {
   const el = document.getElementById('legend');
@@ -316,6 +372,14 @@ function pintaFicha() {
     lin('Pend. proyecto', fmt(F.pp[i], 3) + ' %') +
     lin('Δ pendiente', fmt(F.dp[i], 3) + ' %') +
     lin('Estado', EST_TXT[F.es[i]] + (F.an[i] ? ' · sector anómalo' : ''));
+  if (RV_HAY && RV_F[i]) {
+    const ps = [];
+    for (let k = 0; k < NP; k++) if (P.f[k] === i && RV_PT[k] === 1) ps.push(P.id[k] + ' (' + (RV_D && RV_D[k] != null ? (RV_D[k] > 0 ? '+' : '') + RV_D[k].toFixed(1) : '?') + ' m)');
+    const tot = (() => { let n = 0; for (let k = 0; k < NP; k++) if (P.f[k] === i) n++; return n; })();
+    h += '<div class="fsep">Referencia vertical</div>' +
+      lin('Cotas sospechosas', RV_F[i] + ' de ' + tot + (RV_F[i] >= tot ? ' · la fila entera' : ' · media fila (una mesa)')) +
+      '<p class="hint" style="color:#ff3ea5">Puntos ' + ps.join(', ') + '. Se apartan de los seguidores de al lado a su misma coordenada norte: es una cota entregada en otra referencia, no relieve. Para reclamar al topógrafo, no para corregir aquí.</p>';
+  }
   if (F.og[i] !== 'medido') h += '<p class="hint" style="color:var(--edit)">' + F.og[i] + '</p>';
   el.innerHTML = h;
 }
@@ -334,7 +398,7 @@ function expBt3d() {
     'z_eje_sur', 'z_eje_norte', 'longitud', 'pend_long_pct', 'ala_sur_pct', 'ala_norte_pct',
     'pend_transv_oeste_pct', 'pend_result_oeste_pct', 'azimut_oeste_deg', 'vecina_oeste', 'hermana_oeste',
     'pend_transv_este_pct', 'pend_result_este_pct', 'azimut_este_deg', 'vecina_este', 'hermana_este',
-    'z_motor', 'motor_medido', 'origen'];
+    'z_motor', 'motor_medido', 'origen', 'cotas_otra_referencia'];
   const f = idxsActuales.map(i => {
     const ms = mesasDe.get(i);
     return [F.id[i], F.zo[i], F.tk[i], F.fl[i], F.tp[i], F.st[i], F.ar[i] ? 'SI' : 'NO',
@@ -342,25 +406,25 @@ function expBt3d() {
       ms ? M.p[ms[0]] : '', ms ? M.p[ms[1]] : '',
       F.so[i], F.mo[i], F.ao[i], F.vo[i] >= 0 ? F.id[F.vo[i]] : '', F.ho[i] ? 'SI' : 'NO',
       F.se[i], F.me[i], F.ae[i], F.ve[i] >= 0 ? F.id[F.ve[i]] : '', F.he[i] ? 'SI' : 'NO',
-      O.z[i], O.m[i] ? 'SI' : 'NO', F.og[i]];
+      O.z[i], O.m[i] ? 'SI' : 'NO', F.og[i], RV_F[i]];
   });
-  csv('ayora_config_bt3d.csv', cab, f);
+  csv(SLUG + '_config_bt3d.csv', cab, f);
 }
 function expVista() {
   if (ui.view === 'pts') {
     const s = new Set(idxsActuales), f = [];
-    for (let k = 0; k < NP; k++) if (s.has(P.f[k])) f.push([P.id[k], P.x[k], P.y[k], P.z[k], F.id[P.f[k]], EXT_TXT[P.e[k]], P.j[k] ? 'SI' : 'NO']);
-    csv('ayora_puntos.csv', ['punto', 'x', 'y', 'z', 'fila', 'extremo', 'junta'], f);
+    for (let k = 0; k < NP; k++) if (s.has(P.f[k])) f.push([P.id[k], P.x[k], P.y[k], P.z[k], F.id[P.f[k]], EXT_TXT[P.e[k]], P.j[k] ? 'SI' : 'NO', !RV_HAY ? 'sin comprobar' : RV_PT[k] === 1 ? 'OTRA REFERENCIA' : RV_PT[k] === 2 ? 'sin decidir' : 'comprobada', RV_D ? RV_D[k] : '']);
+    csv(SLUG + '_puntos.csv', ['punto', 'x', 'y', 'z', 'fila', 'extremo', 'junta', 'referencia_vertical', 'desvio_lateral_m'], f);
   } else if (ui.view === 'art') {
     const f = [];
     for (const i of idxsActuales) {
       const ms = mesasDe.get(i); if (!ms) continue;
       for (const j of ms) f.push([F.id[i], M.s[j], M.y0[j], M.y1[j], M.z0[j], M.z1[j], M.L[j], M.p[j], O.z[i], O.d[i]]);
     }
-    csv('ayora_alas_articuladas.csv', ['fila', 'ala', 'y_ini', 'y_fin', 'z_ini', 'z_fin', 'longitud', 'pend_pct', 'z_motor', 'desplaz_motor'], f);
+    csv(SLUG + '_alas_articuladas.csv', ['fila', 'ala', 'y_ini', 'y_fin', 'z_ini', 'z_fin', 'longitud', 'pend_pct', 'z_motor', 'desplaz_motor'], f);
   } else {
-    const f = idxsActuales.map(i => [F.id[i], F.tp[i], F.sl[i], F.pp[i], F.dp[i], EST_TXT[F.es[i]], F.an[i] ? 'SI' : 'NO']);
-    csv('ayora_asbuilt.csv', ['fila', 'tipo', 'pend_medida_pct', 'pend_proyecto_pct', 'delta_pct', 'estado', 'sector_anomalo'], f);
+    const f = idxsActuales.map(i => [F.id[i], F.tp[i], F.sl[i], F.pp[i], F.dp[i], EST_TXT[F.es[i]], F.an[i] ? 'SI' : 'NO', RV_F[i]]);
+    csv(SLUG + '_asbuilt.csv', ['fila', 'tipo', 'pend_medida_pct', 'pend_proyecto_pct', 'delta_pct', 'estado', 'sector_anomalo', 'cotas_otra_referencia'], f);
   }
 }
 let flashT = null;
@@ -392,7 +456,7 @@ document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('c
 document.getElementById('metricSel').addEventListener('change', e => { ui.metric = e.target.value; render(); });
 document.getElementById('zonaSel').addEventListener('change', e => { ui.zona = e.target.value; render(); });
 document.getElementById('tipoSel').addEventListener('change', e => { ui.tipo = e.target.value; render(); });
-[['chkArt', 'soloArt'], ['chkAnom', 'soloAnom'], ['chkFilas', 'filas'], ['chkMot', 'mot'], ['chkPts', 'pts'], ['chkVec', 'vec']]
+[['chkArt', 'soloArt'], ['chkAnom', 'soloAnom'], ['chkRV', 'soloRV'], ['chkCapaRV', 'rv'], ['chkFilas', 'filas'], ['chkMot', 'mot'], ['chkPts', 'pts'], ['chkVec', 'vec']]
   .forEach(([id, k]) => document.getElementById(id).addEventListener('change', e => { ui[k] = e.target.checked; render(); }));
 document.getElementById('expBt3d').addEventListener('click', expBt3d);
 document.getElementById('expView').addEventListener('click', expVista);
@@ -421,10 +485,27 @@ document.getElementById('hdrSub').textContent =
   MET.n_trk.toLocaleString('es') + ' bifilas · ' + MET.n_filas.toLocaleString('es') + ' filas · ' +
   MET.n_pts.toLocaleString('es') + ' puntos · ' + MET.n_art_trk + ' bifilas articuladas.';
 document.getElementById('notas').innerHTML =
-  'Pitch entre filas <b>' + MET.pitch.toFixed(3) + ' m</b>, uniforme (medido, no de proyecto). ' +
-  'Eje norte-sur puro (azimut ' + MET.azimut_eje + '°). ' +
-  'Las cotas <b>Z eje</b> son la cota medida sobre módulo menos ' + MET.h_eje + ' m; ' +
-  'esa constante está por confirmar con el detalle de montaje y no afecta a pendientes ni azimutes. ' +
+  (MET.pitch != null ? 'Pitch entre filas <b>' + MET.pitch.toFixed(3) + ' m</b>, uniforme (medido, no de proyecto). ' : '') +
+  (MET.azimut_eje != null ? 'Eje norte-sur puro (azimut ' + MET.azimut_eje + '°). ' : 'Eje norte-sur. ') +
+  (MET.h_eje != null ? 'Las cotas <b>Z eje</b> son la cota medida sobre módulo menos ' + MET.h_eje + ' m; ' +
+    'esa constante está por confirmar con el detalle de montaje y no afecta a pendientes ni azimutes. '
+    : 'Las cotas son la <b>cota medida sobre módulo</b>: la altura del eje bajo el módulo no está levantada en esta planta. ') +
   'Azimut medido desde el norte en sentido horario, en la dirección de máxima pendiente descendente. ' +
-  'El quiebro solo se aplica a las ' + MET.n_art_trk + ' bifilas con cota de motor medida; el resto son vigas rígidas.';
+  (MET.n_art_trk ? 'El quiebro solo se aplica a las ' + MET.n_art_trk + ' bifilas con cota de motor medida; el resto son vigas rígidas. '
+   : 'Ninguna bifila tiene cota de motor levantada: todas se tratan como vigas rígidas. ') +
+  (!RV_HAY ? 'Las cotas de esta planta <b>no se han contrastado</b> contra su referencia vertical. '
+   : RV_N ? '<b>' + MET.n_rv + ' cotas en ' + RV_N + ' filas vienen en otra referencia vertical</b> (se apartan de los ' +
+     'seguidores de al lado a su misma coordenada norte). Se marcan, no se corrigen: son para reclamar al topógrafo. '
+   : 'Las cotas se han contrastado contra sus vecinas laterales y <b>ninguna</b> viene en otra referencia vertical. ');
+/* La casilla de filtro solo aparece si hay algo que filtrar; el aviso de que se
+   ha mirado y está limpio va en las notas, que es donde no estorba. */
+if (RV_HAY && RV_N) {
+  document.getElementById('lblRV').hidden = false;
+  document.getElementById('lblCapaRV').hidden = false;
+  document.getElementById('chkCapaRV').checked = true;
+  document.getElementById('nRV').textContent = '(' + RV_N + ' filas · ' + MET.n_rv + ' cotas)';
+}
+/* Sin el dato no se ofrece la métrica: pintar todo de «sin cotas sospechosas»
+   sería afirmar una comprobación que no se ha hecho. */
+if (!RV_HAY) for (const v of Object.values(MODES)) v.metrics = v.metrics.filter(m => m.k !== 'rvf' && m.k !== 'rvp' && m.k !== 'rd');
 pintaMetricas(); pintaFicha(); render(); enganchaClick();

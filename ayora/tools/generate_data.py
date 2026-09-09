@@ -16,11 +16,13 @@ Salida:
 Uso:
   cd tools && python3 generate_data.py
 """
-import os, csv, json, math, collections
+import os, csv, json, math, collections, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC  = os.path.join(HERE, 'source')
 OUT  = os.path.join(HERE, '..', 'js', 'data.js')
+sys.path.insert(0, os.path.join(HERE, '..', '..', 'asbuilt', 'tools'))
+import ref_vertical                                    # mismo criterio que San José
 
 EST = {'ok': 0, 'atencion': 1, 'revisar': 2, 'sin dato': 3}
 EXT = {'sur': 0, 'norte': 1, 'motor': 2}
@@ -114,6 +116,13 @@ def main():
         P['e'].append(EXT[r['extremo']])
         P['j'].append(1 if r['junta'] == 'SI' else 0)
 
+    # --- cotas con otra referencia vertical ----------------------------------
+    # Mismo criterio que San José, aunque aquí no marque nada: que una planta
+    # salga limpia solo vale si se ha mirado con la misma vara.
+    P['r'], P['rd'] = ref_vertical.marca(P['x'], P['y'], P['z'])
+    txtRV, nMal = ref_vertical.resumen(P['r'], P['rd'], P['f'])
+    F['rv'] = [nMal.get(i, 0) for i in range(len(filas))]
+
     # pitch real observado (mediana de las separaciones a cada lado)
     pit = []
     for i in range(len(filas)):
@@ -131,6 +140,9 @@ def main():
         pitch=round(pit[len(pit) // 2], 3),
         h_eje=0.829,
         azimut_eje=0.0014,
+        huso='30N',                 # Valencia; San José declara 19S (Arequipa)
+        n_rv=sum(1 for v in P['r'] if v == ref_vertical.MARCADO),
+        n_rv_filas=sum(1 for v in F['rv'] if v),
     )
 
     data = dict(meta=meta, f=dict(F), m=dict(M), o=dict(O), p=dict(P))
@@ -139,6 +151,7 @@ def main():
         f.write(js)
     print('js/data.js  %.1f KB  ·  %d filas · %d puntos · %d filas articuladas'
           % (len(js) / 1024, meta['n_filas'], meta['n_pts'], meta['n_art']))
+    print(txtRV)
 
 
 if __name__ == '__main__':

@@ -9,8 +9,14 @@ y pendientes/azimut hacia las vecinas). San José tenía en su lugar el editor d
 asignación puntos↔tracker, con los puntos ya casados pero sin derivar geometría.
 Esto lo deriva:
 
-  final_v2_labeled.csv  ->  una fila por (Tracker_ID, row_side), con sus 4 esquinas
-                            (NW/NE/SW/SE) promediadas a extremo sur y extremo norte.
+  final_v2_labeled.csv  ->  una fila por (Tracker_ID, row_side). En San José esa
+                            fila es un TUBO DE DOS MESAS de 36,74 m con una junta
+                            de 0,89 m, y sus 4 puntos son las puntas de cada mesa
+                            (dos etiquetadas N y dos S): los extremos de la fila
+                            son el punto más al sur y el más al norte, NO la media
+                            de las esquinas — promediarlas colapsaba el tubo a la
+                            mitad de su largo. En Ayora la fila es una sola mesa y
+                            las dos formas coinciden.
   shear.csv             ->  cizallado por seguidor (diferencia entre sus dos filas).
 
 Salida: ../js/data.js con el esquema de Ayora (los campos que San José no puede
@@ -19,11 +25,13 @@ trata como "sin dato").
 
 Uso:  cd san-jose/tools && python3 generate_asbuilt.py
 """
-import os, csv, json, math, collections, statistics
+import os, csv, json, math, collections, statistics, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC  = os.path.join(HERE, 'source')
 OUT  = os.path.join(HERE, '..', 'js', 'data_asbuilt.js')
+sys.path.insert(0, os.path.join(HERE, '..', '..', 'asbuilt', 'tools'))
+import ref_vertical                                    # mismo criterio que Ayora
 
 
 def rd(name):
@@ -54,10 +62,26 @@ def main():
         sur   = [p for p in ps if p['corner'] in ('SW', 'SE')]
         if not norte or not sur:
             continue                                   # fila incompleta: sin geometría fiable
-        y1 = statistics.fmean(float(p['Y']) for p in norte)
-        y0 = statistics.fmean(float(p['Y']) for p in sur)
-        z1 = statistics.fmean(float(p['Z']) for p in norte)
-        z0 = statistics.fmean(float(p['Z']) for p in sur)
+        # LOS EXTREMOS SON LOS EXTREMOS, NO LA MEDIA DE LAS ESQUINAS. En Ayora
+        # una fila es UNA mesa y sus dos puntos son sus dos puntas, asi que
+        # promediar da lo mismo. En San Jose la fila es un TUBO DE DOS MESAS de
+        # 36,74 m con una junta de 0,89 m en medio, y sus cuatro puntos son las
+        # puntas de CADA mesa: hay dos etiquetados N y dos etiquetados S, a 37 m
+        # unos de otros. Promediarlos colapsaba el tubo a la MITAD de su largo
+        # (36,75 m declarados frente a 74,43 m que cubren sus propios puntos y
+        # 75,12 m de separacion entre filas de la misma linea) y ademas lo
+        # centraba justo en la junta: en el plano, las lineas de puntos caian
+        # FUERA de las barras, que es como se vio.
+        #
+        # Y no era solo el dibujo: la pendiente longitudinal salia de restar dos
+        # medias, y eso ESCONDIA los saltos de referencia vertical. En
+        # TR-09_1-044-E la mesa sur esta a 1531,7 m y la norte a 1568,7 —36,7 m
+        # en el mismo tubo, imposible— y la resta de medias daba +0,28 %, un
+        # numero de lo mas normal. Con los extremos de verdad sale ~+49 %, que
+        # el propio filtro de 15 % ya descarta y marca la fila sin pendiente.
+        ext = sorted(ps, key=lambda p: float(p['Y']))
+        y0, z0 = float(ext[0]['Y']), float(ext[0]['Z'])       # punta sur
+        y1, z1 = float(ext[-1]['Y']), float(ext[-1]['Z'])     # punta norte
         x  = statistics.fmean(float(p['X']) for p in ps)
         L  = abs(y1 - y0)
         sl = ((z1 - z0) / L * 100) if L > 5 else None   # pendiente longitudinal (%); fila corta = extremos mal casados
@@ -146,6 +170,14 @@ def main():
         P['e'].append(EXT.get((r['corner'] or ' ')[0], 0))
         P['j'].append(0)
 
+    # --- cotas con otra referencia vertical ----------------------------------
+    # No se corrigen ni se esconden: se MARCAN, y el visor las enseña. Una cota
+    # de otro sistema no es un punto «raro», es un dato que hay que devolverle
+    # al topógrafo con su id.
+    P['r'], P['rd'] = ref_vertical.marca(P['x'], P['y'], P['z'])
+    txt, nMal = ref_vertical.resumen(P['r'], P['rd'], P['f'])
+    F['rv'] = [nMal.get(i, 0) for i in range(len(orden))]
+
     pit = []
     for i in range(len(orden)):
         for j in vecino[i]:
@@ -155,7 +187,9 @@ def main():
 
     meta = dict(planta='San José', codigo='24019', cliente='Acciona',
                 n_filas=len(orden), n_trk=len({o[1] for o in orden}), n_pts=len(P['id']),
-                n_art=0, n_art_trk=0, n_art_plano=0,
+                n_art=0, n_art_trk=0, n_art_plano=0, huso='19S',   # Arequipa (Peru), no 30N
+                n_rv=sum(1 for v in P['r'] if v == ref_vertical.MARCADO),
+                n_rv_filas=sum(1 for v in F['rv'] if v),
                 pitch=round(pit[len(pit) // 2], 2) if pit else None,
                 h_eje=None, azimut_eje=None)
 
@@ -164,6 +198,7 @@ def main():
                                             ensure_ascii=False, separators=(',', ':')) + ';\n')
     print('filas:', len(orden), '· trackers:', meta['n_trk'], '· puntos:', meta['n_pts'],
           '· pitch:', meta['pitch'])
+    print(txt)
     sl = [v for v in F['sl'] if v is not None]
     so = [v for v in F['so'] if v is not None]
     if sl:

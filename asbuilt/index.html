@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0B0F14">
 <title>Visor as-built — Factiun</title>
-<link rel="icon" href="favicon.svg">
+<link rel="icon" href="../favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -68,6 +68,7 @@
       </select>
       <label class="chk"><input type="checkbox" id="chkArt"> Solo articuladas <span id="nArt"></span></label>
       <label class="chk"><input type="checkbox" id="chkAnom"> Solo sector anómalo</label>
+      <label class="chk" id="lblRV" hidden><input type="checkbox" id="chkRV"> Solo cota de otra referencia <span id="nRV"></span></label>
       <div id="counts"></div>
     </div>
 
@@ -77,6 +78,7 @@
       <label class="chk"><input type="checkbox" id="chkMot"> Motores (rombos)</label>
       <label class="chk"><input type="checkbox" id="chkPts"> Puntos del levantamiento</label>
       <label class="chk"><input type="checkbox" id="chkVec"> Vecinas de la fila elegida</label>
+      <label class="chk" id="lblCapaRV" hidden><input type="checkbox" id="chkCapaRV"> Resaltar cotas de otra referencia</label>
     </div>
 
     <div class="grp">

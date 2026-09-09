@@ -9,15 +9,26 @@ y pendientes/azimut hacia las vecinas). San José tenía en su lugar el editor d
 asignación puntos↔tracker, con los puntos ya casados pero sin derivar geometría.
 Esto lo deriva:
 
-  final_v2_labeled.csv  ->  una fila por (Tracker_ID, row_side). En San José esa
-                            fila es un TUBO DE DOS MESAS de 36,74 m con una junta
-                            de 0,89 m, y sus 4 puntos son las puntas de cada mesa
-                            (dos etiquetadas N y dos S): los extremos de la fila
-                            son el punto más al sur y el más al norte, NO la media
-                            de las esquinas — promediarlas colapsaba el tubo a la
-                            mitad de su largo. En Ayora la fila es una sola mesa y
-                            las dos formas coinciden.
+  sanjose_asbuilt.json  ->  una fila por (tracker, lado E/W), ya con sus extremos
+  sanjose_puntos.json       medidos y sus puntos. Los dos salen del MISMO reparto
+                            (cobertura-zigbee tools/reparte_levantamiento.py) que
+                            usa el simulador: un reparto, un dibujo.
   shear.csv             ->  cizallado por seguidor (diferencia entre sus dos filas).
+
+DE DÓNDE VENÍA Y POR QUÉ SE CAMBIA. Hasta aquí esto leía `final_v2_labeled.csv`,
+la asignación punto↔tracker que vino del proveedor. Esa asignación tenía 93
+trackers con puntos IMPOSIBLES —hasta 1.575 m de dispersión, uno con 44 puntos
+repartidos un kilómetro en Y con 0,5 m en X— y, sobre todo, decidía la fase de
+cada tubo tracker a tracker: 153 seguidores se quedaban con una sola viga y
+algunos se dibujaban a media longitud, que es lo que se veía en el visor con los
+puntos cayendo fuera de las barras. El dato del topógrafo estaba intacto; lo que
+fallaba era de quién se decía que era cada punto.
+
+El reparto nuevo resuelve la FASE POR LÍNEA (hay líneas cuyos tubos están
+desplazados 7 m respecto de lo que el plano declara para ese tracker) y comparte
+el punto de un tope medido una sola vez entre los dos tubos que se encuentran
+ahí. Contra lo que había: 4.421 -> 4.449 filas, 2.134 -> 2.162 trackers con las
+dos vigas, 153 -> 125 con una sola, y ninguna fila emitida a media longitud.
 
 Salida: ../js/data.js con el esquema de Ayora (los campos que San José no puede
 tener todavía —articulaciones, motores medidos— van vacíos, y el visor ya los
@@ -44,24 +55,24 @@ def num(v, nd=3):
 
 
 def main():
-    ptos = [r for r in rd('final_v2_labeled.csv') if r.get('assigned') == 'True']
+    with open(os.path.join(SRC, 'sanjose_asbuilt.json'), encoding='utf-8') as f:
+        AB = json.load(f)
+    with open(os.path.join(SRC, 'sanjose_puntos.json'), encoding='utf-8') as f:
+        NB = json.load(f)
     shear = {r['tid']: float(r['shear']) for r in rd('shear.csv') if r.get('shear') not in (None, '')}
 
-    # --- una "fila" por (tracker, lado W/E): sus 4 esquinas -------------------
-    filas = collections.defaultdict(list)
-    for r in ptos:
-        tid, side = r['Tracker_ID'], r['row_side']
-        if not tid or side not in ('W', 'E'):
-            continue
-        filas[(tid, side)].append(r)
+    # El as-built del reparto va en el sistema LOCAL de la planta (cE/cN/base) y
+    # su eje z apunta al SUR: zs = -n_sur. El visor dibuja en UTM absolutas, que
+    # es lo que trae la nube. Se deshace aquí y no en dos sitios distintos.
+    cE, cN, base = AB['meta']['cE'], AB['meta']['cN'], AB['meta']['base']
+    nPor = collections.defaultdict(list)               # id de fila -> puntos de la nube
+    for i in range(NB['n']):
+        nPor[NB['filas'][NB['fi'][i]]].append(i)
 
     F = collections.defaultdict(list)
     idx, orden = {}, []
-    for (tid, side), ps in filas.items():
-        norte = [p for p in ps if p['corner'] in ('NW', 'NE')]
-        sur   = [p for p in ps if p['corner'] in ('SW', 'SE')]
-        if not norte or not sur:
-            continue                                   # fila incompleta: sin geometría fiable
+    for r in AB['f']:
+        fid, tid, side = r['id'], r['tk'], r['id'].rsplit('-', 1)[1]
         # LOS EXTREMOS SON LOS EXTREMOS, NO LA MEDIA DE LAS ESQUINAS. En Ayora
         # una fila es UNA mesa y sus dos puntos son sus dos puntas, asi que
         # promediar da lo mismo. En San Jose la fila es un TUBO DE DOS MESAS de
@@ -71,7 +82,8 @@ def main():
         # (36,75 m declarados frente a 74,43 m que cubren sus propios puntos y
         # 75,12 m de separacion entre filas de la misma linea) y ademas lo
         # centraba justo en la junta: en el plano, las lineas de puntos caian
-        # FUERA de las barras, que es como se vio.
+        # FUERA de las barras, que es como se vio. El reparto ya emite los
+        # extremos de verdad, asi que aqui solo se traducen de sitio.
         #
         # Y no era solo el dibujo: la pendiente longitudinal salia de restar dos
         # medias, y eso ESCONDIA los saltos de referencia vertical. En
@@ -79,16 +91,14 @@ def main():
         # en el mismo tubo, imposible— y la resta de medias daba +0,28 %, un
         # numero de lo mas normal. Con los extremos de verdad sale ~+49 %, que
         # el propio filtro de 15 % ya descarta y marca la fila sin pendiente.
-        ext = sorted(ps, key=lambda p: float(p['Y']))
-        y0, z0 = float(ext[0]['Y']), float(ext[0]['Z'])       # punta sur
-        y1, z1 = float(ext[-1]['Y']), float(ext[-1]['Z'])     # punta norte
-        x  = statistics.fmean(float(p['X']) for p in ps)
-        L  = abs(y1 - y0)
-        sl = ((z1 - z0) / L * 100) if L > 5 else None   # pendiente longitudinal (%); fila corta = extremos mal casados
+        y0, y1 = cN - r['zs'], cN - r['zn']            # punta sur / punta norte
+        z0, z1 = base + r['ys'], base + r['yn']
+        x = cE + r['x']
+        L = abs(y1 - y0)
+        sl = ((z1 - z0) / L * 100) if L > 5 else None  # pendiente longitudinal (%)
         if sl is not None and abs(sl) > 15:            # 15% es ya un talud: es un punto mal asignado, no un seguidor
             sl = None
-        fid = tid + '-' + side
-        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(ps)))
+        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ()))))
 
     orden.sort(key=lambda t: (t[3], t[4]))              # de oeste a este, y de sur a norte
     for i, o in enumerate(orden):
@@ -158,17 +168,21 @@ def main():
         F['og'].append('medido')
 
     # --- puntos del levantamiento -------------------------------------------
+    # La nube ya viene en UTM absolutas y con su fila. El extremo (N/S) no lo
+    # trae etiquetado —y menos mal: la etiqueta del proveedor era justo la que
+    # colapsaba el tubo—, se decide por dónde cae respecto del centro de SU fila.
     P = collections.defaultdict(list)
-    EXT = {'N': 1, 'S': 0}
-    for r in ptos:
-        fid = r['Tracker_ID'] + '-' + r['row_side']
+    for fid, ks in nPor.items():
         if fid not in idx:
             continue
-        P['id'].append(int(float(r['id'])))
-        P['x'].append(num(r['X'])); P['y'].append(num(r['Y'])); P['z'].append(num(r['Z']))
-        P['f'].append(idx[fid])
-        P['e'].append(EXT.get((r['corner'] or ' ')[0], 0))
-        P['j'].append(0)
+        i = idx[fid]
+        medio = (orden[i][4] + orden[i][5]) / 2.0
+        for k in ks:
+            P['id'].append(NB['id'][k])
+            P['x'].append(num(NB['x'][k])); P['y'].append(num(NB['y'][k])); P['z'].append(num(NB['z'][k]))
+            P['f'].append(i)
+            P['e'].append(1 if NB['y'][k] > medio else 0)
+            P['j'].append(0)
 
     # --- cotas con otra referencia vertical ----------------------------------
     # No se corrigen ni se esconden: se MARCAN, y el visor las enseña. Una cota

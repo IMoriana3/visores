@@ -242,16 +242,21 @@ function trazaHover(idxs) {
   };
 }
 /* LA BIELA: el eje de transmision entre las dos vigas de un seguidor. Une los
-   morros de las dos filas del mismo tracker (id sin el sufijo -E/-W). Es lo
-   que el simulador usa como accionamiento: un motor mueve las cuatro mesas. */
+   morros de las dos filas del mismo tracker. Es lo que el simulador usa como
+   accionamiento: un motor mueve las cuatro mesas.
+   El seguidor es el id sin su ultimo tramo: TR-10_1-011-E / -W en San Jose,
+   HD-1-0 / HD-1-1 en Ayora. Emparejaba solo por -E/-W y Ayora se quedaba sin
+   bielas: sus 754 seguidores tienen sus dos filas igual que los de San Jose. */
+const TRK = i => String(F.id[i]).replace(/-[^-]*$/, '');
 const PAREJA = (() => {
   const por = new Map();
   for (let i = 0; i < NF; i++) {
-    const k = String(F.id[i]).replace(/-[EW]$/, '');
-    if (k === String(F.id[i])) continue;                 // sin sufijo de lado: no hay pareja que trazar
+    const k = TRK(i);
+    if (k === String(F.id[i])) continue;                 // sin tramo de lado: no hay pareja que trazar
     if (!por.has(k)) por.set(k, []); por.get(k).push(i);
   }
-  return [...por.values()].filter(v => v.length === 2);
+  // dos filas, una de cada lado (fl 0 y 1): no se traza biela entre dos del mismo lado
+  return [...por.values()].filter(v => v.length === 2 && F.fl[v[0]] !== F.fl[v[1]]);
 })();
 function trazaBielas(idxs) {
   const s = new Set(idxs), x = [], y = [], cd = [], px = [], py = [];
@@ -260,7 +265,7 @@ function trazaBielas(idxs) {
     const ya = O.y[a], yb = O.y[b];
     x.push(F.x[a], F.x[b], NaN); y.push(ya, yb, NaN);
     px.push((F.x[a] + F.x[b]) / 2); py.push((ya + yb) / 2);
-    cd.push([String(F.id[a]).replace(/-[EW]$/, ''), fmt(Math.hypot(F.x[b] - F.x[a], yb - ya), 3),
+    cd.push([TRK(a), fmt(Math.hypot(F.x[b] - F.x[a], yb - ya), 3),
              (O.m[a] && O.m[b]) ? 'morros medidos' : 'centro de fila (sin junta medida)']);
   }
   if (!x.length) return [];
@@ -429,6 +434,9 @@ function pintaFicha() {
     lin('Pend. proyecto', fmt(F.pp[i], 3) + ' %') +
     lin('Δ pendiente', fmt(F.dp[i], 3) + ' %') +
     lin('Estado', EST_TXT[F.es[i]] + (F.an[i] ? ' · sector anómalo' : ''));
+  // cizallado: cuanto se corre esta viga a lo largo del eje respecto de su hermana
+  // (comparten tubo: deberia ser ~0). Medido de la geometria dibujada.
+  if (Array.isArray(F.sh) && F.sh[i] != null) h += lin('Cizallado E/W', fmt(F.sh[i], 3) + ' m' + (F.sh[i] > 0.5 ? ' · vigas corridas' : ''));
   if (RV_HAY && RV_F[i]) {
     const ps = [];
     for (let k = 0; k < NP; k++) if (P.f[k] === i && RV_PT[k] === 1) ps.push(P.id[k] + ' (' + (RV_D && RV_D[k] != null ? (RV_D[k] > 0 ? '+' : '') + RV_D[k].toFixed(1) : '?') + ' m)');

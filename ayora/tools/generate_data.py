@@ -87,6 +87,17 @@ def main():
         F['tve'].append(r['tcu_vec_este'])
         F['og'].append(r['origen'])
 
+    # cizallado por seguidor: cuanto se corre a lo largo del eje el centro de
+    # una fila respecto del de su hermana (comparten tubo: deberia ser ~0). El
+    # mismo dato que San Jose, medido igual, de la geometria que se dibuja. El
+    # «sector anomalo» de Ayora es OTRA cosa (desviacion de pendiente frente al
+    # proyecto, del estudio as-built vs .cdt) y se conserva tal cual.
+    _c = collections.defaultdict(list)
+    for i in range(len(filas)):
+        _c[(F['zo'][i], F['tk'][i])].append((F['y0'][i] + F['y1'][i]) / 2.0)
+    shear = {k: abs(v[0] - v[1]) for k, v in _c.items() if len(v) == 2}
+    F['sh'] = [num(shear.get((F['zo'][i], F['tk'][i]))) for i in range(len(filas))]
+
     M = collections.defaultdict(list)
     for r in mesas:
         M['f'].append(idx[r['id']])
@@ -152,6 +163,10 @@ def main():
     print('js/data.js  %.1f KB  ·  %d filas · %d puntos · %d filas articuladas'
           % (len(js) / 1024, meta['n_filas'], meta['n_pts'], meta['n_art']))
     print(txtRV)
+    sh = sorted(v for v in F['sh'] if v is not None)
+    if sh:
+        print('cizallado E/W (m): p50 %.3f · p95 %.3f · max %.3f · >0,5 m: %d filas'
+              % (sh[len(sh) // 2], sh[int(len(sh) * 0.95)], sh[-1], sum(1 for v in sh if v > 0.5)))
 
 
 if __name__ == '__main__':

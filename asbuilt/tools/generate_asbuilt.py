@@ -1,59 +1,55 @@
 #!/usr/bin/env python3
 """
-generate_asbuilt.py — el as-built de módulos de San José, con el MISMO esquema
-que el de Ayora, para que los dos visores sean uno solo.
+generate_asbuilt.py — el as-built de módulos de UNA PLANTA, con el mismo esquema
+para todas, para que el visor (asbuilt/index.html) sea uno solo.
 
-El visor de Ayora lee `window.DATA = {meta, f, m, o, p}` donde `f` es una fila por
-fila de seguidor con su geometría medida (extremos, cotas, pendiente longitudinal
-y pendientes/azimut hacia las vecinas). San José tenía en su lugar el editor de
-asignación puntos↔tracker, con los puntos ya casados pero sin derivar geometría.
-Esto lo deriva:
+    python3 asbuilt/tools/generate_asbuilt.py <planta>        (por defecto sanjose)
 
-  sanjose_asbuilt.json  ->  una fila por (tracker, lado E/W), ya con sus extremos
-  sanjose_puntos.json       medidos y sus puntos. Los dos salen del MISMO reparto
-                            (cobertura-zigbee tools/reparte_levantamiento.py) que
-                            usa el simulador: un reparto, un dibujo.
-  shear.csv             ->  cizallado por seguidor (diferencia entre sus dos filas).
-  sanjose_cotas.json    ->  de dónde sale la geometría de cada viga en el MODELO
-                            (medida · una punta repuesta · duplicada de su
-                            hermana · reconstruida del plano), que es lo que
-                            distingue en el mapa una viga levantada de una
-                            supuesta. Sale de cobertura-zigbee
-                            tools/cotas_asbuilt.py, el mismo que come el 3D.
+Entradas, en asbuilt/source/<planta>/ — copiadas tal cual de cobertura-zigbee,
+que es donde se generan (un reparto, un dibujo):
 
-DE DÓNDE VENÍA Y POR QUÉ SE CAMBIA. Hasta aquí esto leía `final_v2_labeled.csv`,
-la asignación punto↔tracker que vino del proveedor. Esa asignación tenía 93
-trackers con puntos IMPOSIBLES —hasta 1.575 m de dispersión, uno con 44 puntos
-repartidos un kilómetro en Y con 0,5 m en X— y, sobre todo, decidía la fase de
-cada tubo tracker a tracker: 153 seguidores se quedaban con una sola viga y
-algunos se dibujaban a media longitud, que es lo que se veía en el visor con los
-puntos cayendo fuera de las barras. El dato del topógrafo estaba intacto; lo que
-fallaba era de quién se decía que era cada punto.
+  <planta>_asbuilt.json  ->  una fila por (tracker, lado E/W), ya con sus extremos
+  <planta>_puntos.json       medidos y sus puntos (tools/reparte_levantamiento.py).
+  <planta>_cotas.json    ->  de dónde sale la cota de cada viga en el MODELO
+                             (medida · una punta repuesta · las dos · copiada de
+                             su hermana · del plano) y los puntos [id, desvío]
+                             de cada cota repuesta (tools/cotas_asbuilt.py).
+  shear.csv              ->  OPCIONAL: cizallado por seguidor (tid, shear), para
+                             la marca de «sector anómalo».
+  meta.json              ->  OPCIONAL: lo que ni el plano ni el levantamiento
+                             saben (p. ej. {"cliente": "Acciona"}); pisa la meta.
 
-El reparto nuevo resuelve la FASE POR LÍNEA (hay líneas cuyos tubos están
-desplazados 7 m respecto de lo que el plano declara para ese tracker) y comparte
-el punto de un tope medido una sola vez entre los dos tubos que se encuentran
-ahí. Contra lo que había: 4.421 -> 4.449 filas, 2.134 -> 2.162 trackers con las
-dos vigas, 153 -> 125 con una sola, y ninguna fila emitida a media longitud.
+Salida: asbuilt/data/<planta>.js — el fichero que CARGA la página — y una
+entrada en asbuilt/data/plantas.js, que es de donde el selector de la página
+saca las plantas disponibles. La meta (nombre, código, huso UTM) sale del
+propio as-built, que la hereda del layout: aquí no hay nada escrito a mano.
 
-Salida: ../../asbuilt/data/sanjose.js — el fichero que CARGA asbuilt/index.html,
-con el esquema de Ayora (los campos que San José no puede tener todavía
-—articulaciones, motores medidos— van vacíos, y el visor ya los trata como
-"sin dato").
+CÓMO CARGAR UNA PLANTA NUEVA (p. ej. elburgo):
+  1. en cobertura-zigbee: elburgo_layout.json (el plano) + elburgo_levantamiento.csv
+     (el CSV del topógrafo, id,X,Y,Z sin tocar);
+     python3 tools/reparte_levantamiento.py elburgo ; python3 tools/cotas_asbuilt.py elburgo
+  2. copiar elburgo_asbuilt.json, elburgo_puntos.json y elburgo_cotas.json a
+     asbuilt/source/elburgo/ ;  python3 asbuilt/tools/generate_asbuilt.py elburgo
+  3. abrir asbuilt/?planta=elburgo
 
-Uso:  cd san-jose/tools && python3 generate_asbuilt.py
+DE DÓNDE VENÍA. Esto nació como san-jose/tools/generate_asbuilt.py, escrito
+para San José: rutas, huso 19S y nombres clavados. Lo que hace no tiene nada de
+San José —cruzar el as-built con la nube y con las cotas del modelo y traducirlo
+al esquema del visor—, así que se parametriza por planta y se deja aquí, junto
+al visor que lo consume. La historia de por qué el reparto se rehízo (la
+asignación del proveedor tenía 93 trackers con puntos imposibles y decidía la
+fase tracker a tracker) está en el historial del simulador.
 """
 import os, csv, json, math, collections, statistics, sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC  = os.path.join(HERE, 'source')
-# EL FICHERO QUE SIRVE LA PÁGINA, no una copia suya. Esto escribía en
-# san-jose/js/data_asbuilt.js, que no lo carga NADIE: la página del as-built es
-# asbuilt/index.html y lee asbuilt/data/<planta>.js. Los dos se separaron y el
-# visor se quedó sirviendo 4.491 filas de una versión vieja mientras el
-# generador decía «OK» sobre el fichero muerto. Una sola salida, la de verdad.
-OUT  = os.path.join(HERE, '..', '..', 'asbuilt', 'data', 'sanjose.js')
-sys.path.insert(0, os.path.join(HERE, '..', '..', 'asbuilt', 'tools'))
+HERE   = os.path.dirname(os.path.abspath(__file__))
+PLANTA = (sys.argv[1] if len(sys.argv) > 1 else 'sanjose').strip().lower().replace('-', '')
+SRC    = os.path.join(HERE, '..', 'source', PLANTA)
+# EL FICHERO QUE SIRVE LA PÁGINA, no una copia suya (asbuilt/index.html lee
+# data/<planta>.js). Y el manifiesto de plantas, del que sale el selector.
+OUT  = os.path.join(HERE, '..', 'data', PLANTA + '.js')
+MANI = os.path.join(HERE, '..', 'data', 'plantas.js')
+sys.path.insert(0, HERE)
 import ref_vertical                                    # mismo criterio que Ayora
 
 
@@ -77,11 +73,12 @@ def num(v, nd=3):
 
 
 def main():
-    with open(os.path.join(SRC, 'sanjose_asbuilt.json'), encoding='utf-8') as f:
+    with open(os.path.join(SRC, PLANTA + '_asbuilt.json'), encoding='utf-8') as f:
         AB = json.load(f)
-    with open(os.path.join(SRC, 'sanjose_puntos.json'), encoding='utf-8') as f:
+    with open(os.path.join(SRC, PLANTA + '_puntos.json'), encoding='utf-8') as f:
         NB = json.load(f)
-    shear = {r['tid']: float(r['shear']) for r in rd('shear.csv') if r.get('shear') not in (None, '')}
+    shear = ({r['tid']: float(r['shear']) for r in rd('shear.csv') if r.get('shear') not in (None, '')}
+             if os.path.exists(os.path.join(SRC, 'shear.csv')) else {})
     # DE DÓNDE SALE CADA VIGA EN EL MODELO. El as-built del reparto trae la
     # geometría medida; el que decide qué cota es medida y qué cota se repone
     # es `cotas_asbuilt.py`, y eso vive en sanjose_cotas.json. Sin cruzarlos, el
@@ -91,7 +88,7 @@ def main():
     #   repuestas (posición y largo medidos) · 3 viga DUPLICADA de su hermana ·
     #   4 seguidor RECONSTRUIDO del plano
     CO = None
-    _co = os.path.join(SRC, 'sanjose_cotas.json')
+    _co = os.path.join(SRC, PLANTA + '_cotas.json')
     if os.path.exists(_co):
         with open(_co, encoding='utf-8') as f:
             CO = json.load(f)
@@ -283,9 +280,19 @@ def main():
                 pit.append(abs(orden[j][3] - orden[i][3]))
     pit.sort()
 
-    meta = dict(planta='San José', codigo='24019', cliente='Acciona',
+    # nombre, codigo y huso: del as-built, que los hereda del layout de la
+    # planta. Sin huso declarado, el visor dice «UTM» a secas: no se inventa.
+    # Lo que ni el layout ni el levantamiento saben (el cliente, p. ej.) va
+    # DECLARADO a mano en source/<planta>/meta.json, y pisa a lo heredado.
+    MA = dict(AB.get('meta', {}))
+    _mj = os.path.join(SRC, 'meta.json')
+    if os.path.exists(_mj):
+        with open(_mj, encoding='utf-8') as f:
+            MA.update(json.load(f))
+    meta = dict(planta=MA.get('planta') or PLANTA, codigo=MA.get('codigo') or '',
+                cliente=MA.get('cliente') or '',
                 n_filas=len(orden), n_trk=len({o[1] for o in orden}), n_pts=len(P['id']),
-                n_art=0, n_art_trk=0, n_art_plano=0, huso='19S',   # Arequipa (Peru), no 30N
+                n_art=0, n_art_trk=0, n_art_plano=0, huso=MA.get('huso'),
                 n_rv=sum(1 for v in P['r'] if v == ref_vertical.MARCADO),
                 n_rv_filas=sum(1 for v in F['rv'] if v),
                 pitch=round(pit[len(pit) // 2], 2) if pit else None,
@@ -294,6 +301,17 @@ def main():
     with open(OUT, 'w', encoding='utf-8') as f:
         f.write('window.DATA=' + json.dumps(dict(meta=meta, f=dict(F), m={}, o={}, p=dict(P)),
                                             ensure_ascii=False, separators=(',', ':')) + ';\n')
+    # el manifiesto: una entrada por planta generada (Ayora la escribe su propio
+    # generador; si aún no está, se conserva lo que haya)
+    mani = {}
+    if os.path.exists(MANI):
+        with open(MANI, encoding='utf-8') as f:
+            txt = f.read()
+            mani = json.loads(txt[txt.index('=') + 1:].rstrip().rstrip(';'))
+    mani[PLANTA] = dict(titulo=meta['planta'], codigo=meta['codigo'], huso=meta['huso'],
+                        n_filas=meta['n_filas'], n_trk=meta['n_trk'], n_pts=meta['n_pts'])
+    with open(MANI, 'w', encoding='utf-8') as f:
+        f.write('window.PLANTAS=' + json.dumps(mani, ensure_ascii=False, sort_keys=True) + ';\n')
     print('filas:', len(orden), '· trackers:', meta['n_trk'], '· puntos:', meta['n_pts'],
           '· pitch:', meta['pitch'])
     print(txt)

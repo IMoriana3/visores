@@ -17,7 +17,7 @@ planta en `data/<planta>.js`, todos con el mismo esquema (`window.DATA = {meta,f
 | planta | filas | seguidores | puntos | origen |
 |---|---|---|---|---|
 | Ayora | 1.508 | 754 | 3.069 | `ayora/tools/generate_data.py` (levantamiento feb-2026) |
-| San José | 4.491 | 2.287 | 17.839 | `san-jose/tools/generate_asbuilt.py` (asignación ya casada) |
+| San José | 4.578 | 2.289 | 18.289 | `asbuilt/tools/generate_asbuilt.py sanjose` (reparto de cobertura-zigbee) |
 
 Las plantas sin articulaciones ni motores levantados (San José) traen esos bloques
 vacíos: la app lo dice («ninguna medida») en vez de fingir que valen cero.
@@ -75,3 +75,19 @@ resalte encima de cualquier coloreado, métricas propias en las vistas de filas 
 puntos, y el detalle con **id de punto y desvío** en la ficha de la fila. **No se
 corrigen**: se marcan, porque lo que toca es reclamárselas al topógrafo. Un punto
 que no se puede decidir no se declara limpio.
+
+## Cargar una planta nueva
+
+El visor no sabe de plantas: las lee de `data/plantas.js`, que escribe el
+generador. Para una planta nueva (p. ej. `elburgo`):
+
+1. En **cobertura-zigbee**, con `elburgo_layout.json` (el plano) y
+   `elburgo_levantamiento.csv` (el CSV del topógrafo, `id,X,Y,Z` sin tocar):
+   `python3 tools/reparte_levantamiento.py elburgo` y
+   `python3 tools/cotas_asbuilt.py elburgo`. No hace falta as-built previo: la
+   meta sale del layout y la base de cotas de la mediana del levantamiento.
+2. Copiar `elburgo_asbuilt.json`, `elburgo_puntos.json` y `elburgo_cotas.json` a
+   `asbuilt/source/elburgo/` (opcionales: `shear.csv`, `meta.json` con lo que
+   el plano no sabe, como el cliente).
+3. `python3 asbuilt/tools/generate_asbuilt.py elburgo` → `data/elburgo.js` y la
+   entrada en `data/plantas.js`. Abrir `asbuilt/?planta=elburgo`.

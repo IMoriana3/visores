@@ -18,8 +18,7 @@
   <h1>As-built de módulos</h1>
   <span class="sub">Geometría medida de los seguidores · configuración de backtracking 3D</span>
   <select id="plantaSel" class="client" style="background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--text);padding:4px 8px;font:inherit">
-    <option value="ayora">Ayora · 24025 · Valencia</option>
-    <option value="sanjose">San José · 24019 · Arequipa</option>
+    <!-- las opciones salen de data/plantas.js, que escribe el generador de cada planta -->
   </select>
   <span class="brand">Factiun</span>
 </header>
@@ -119,19 +118,29 @@
 
 <script src="../lib/plotly.min.js"></script>
 <script>
-  /* ?planta=ayora|sanjose — una sola app para todas las plantas medidas */
-  var PLANTA=(function(){try{var p=new URLSearchParams(location.search).get('planta');return (p==='sanjose'||p==='san-jose')?'sanjose':'ayora';}catch(e){return 'ayora';}})();
+  /* ?planta=<slug> — una sola app para todas las plantas medidas. Las plantas
+     disponibles las declara data/plantas.js (lo escribe el generador de cada
+     una): cargar una planta nueva es generarla, no tocar esta página. */
+  document.write('<scr'+'ipt src="data/plantas.js"></scr'+'ipt>');
+ </script>
+<script>
+  var PLANTAS=window.PLANTAS||{ayora:{titulo:'Ayora'}};
+  var PLANTA=(function(){try{var p=String(new URLSearchParams(location.search).get('planta')||'').toLowerCase().replace(/-/g,'');
+    return PLANTAS[p]?p:(PLANTAS.ayora?'ayora':Object.keys(PLANTAS)[0]);}catch(e){return 'ayora';}})();
   document.write('<scr'+'ipt src="data/'+PLANTA+'.js"></scr'+'ipt>');
  </script>
 <script>
-  (function(){var s=document.getElementById('plantaSel');if(!s)return;s.value=PLANTA;
+  (function(){var s=document.getElementById('plantaSel');if(!s)return;
+    Object.keys(PLANTAS).sort().forEach(function(k){var o=document.createElement('option');o.value=k;
+      var m=PLANTAS[k]||{};o.textContent=[m.titulo||k,m.codigo,m.huso?('UTM '+m.huso):null].filter(Boolean).join(' · ');s.appendChild(o);});
+    s.value=PLANTA;
     s.onchange=function(){var u=new URL(location.href);u.searchParams.set('planta',this.value);location.href=u.href;};
     var h=document.getElementById('hdrPlanta');
     if(h&&window.DATA&&DATA.meta)h.textContent=String(DATA.meta.planta||'').toUpperCase();
     /* Cada ?planta llega desde una tarjeta distinta del panel: la pestaña dice
-       el nombre de ESA tarjeta, para poder distinguir las dos abiertas a la vez. */
+       el nombre de ESA planta, para poder distinguir dos abiertas a la vez. */
     var TITULOS={sanjose:'Visor de levantamiento · San José',ayora:'Visor de geometría as-built · Ayora'};
-    document.title=(TITULOS[PLANTA]||'Visor as-built')+' — Factiun';
+    document.title=(TITULOS[PLANTA]||('Visor as-built · '+((PLANTAS[PLANTA]||{}).titulo||PLANTA)))+' — Factiun';
     /* los textos que antes iban fijos a Ayora salen ahora del propio dato */
     var m=window.DATA&&DATA.meta||{};
     var na=document.getElementById('nArt');if(na)na.textContent=m.n_art?('('+m.n_art+' filas)'):'(ninguna medida)';

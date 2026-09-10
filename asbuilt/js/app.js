@@ -103,7 +103,7 @@ const MODES = {
 };
 
 let ui = { view: 'bt3d', metric: 'sl', zona: 'all', tipo: 'all', soloArt: false, soloAnom: false,
-           filas: true, mot: false, pts: false, vec: false, soloRV: false, soloOG: false, rv: true };
+           filas: true, mot: false, biel: false, pts: false, vec: false, soloRV: false, soloOG: false, rv: true };
 let sel = -1, uirev = 1, pendingRange = null;
 
 /* ---------------- valores derivados ---------------- */
@@ -241,6 +241,34 @@ function trazaHover(idxs) {
     showlegend: false
   };
 }
+/* LA BIELA: el eje de transmision entre las dos vigas de un seguidor. Une los
+   morros de las dos filas del mismo tracker (id sin el sufijo -E/-W). Es lo
+   que el simulador usa como accionamiento: un motor mueve las cuatro mesas. */
+const PAREJA = (() => {
+  const por = new Map();
+  for (let i = 0; i < NF; i++) {
+    const k = String(F.id[i]).replace(/-[EW]$/, '');
+    if (k === String(F.id[i])) continue;                 // sin sufijo de lado: no hay pareja que trazar
+    if (!por.has(k)) por.set(k, []); por.get(k).push(i);
+  }
+  return [...por.values()].filter(v => v.length === 2);
+})();
+function trazaBielas(idxs) {
+  const s = new Set(idxs), x = [], y = [], cd = [], px = [], py = [];
+  for (const [a, b] of PAREJA) {
+    if (!s.has(a) && !s.has(b)) continue;
+    const ya = O.y[a], yb = O.y[b];
+    x.push(F.x[a], F.x[b], NaN); y.push(ya, yb, NaN);
+    px.push((F.x[a] + F.x[b]) / 2); py.push((ya + yb) / 2);
+    cd.push([String(F.id[a]).replace(/-[EW]$/, ''), fmt(Math.hypot(F.x[b] - F.x[a], yb - ya), 3),
+             (O.m[a] && O.m[b]) ? 'morros medidos' : 'centro de fila (sin junta medida)']);
+  }
+  if (!x.length) return [];
+  return [{ type: 'scattergl', mode: 'lines', x, y, line: { color: '#c9d2dc', width: 2 }, hoverinfo: 'skip', showlegend: false },
+          { type: 'scattergl', mode: 'markers', x: px, y: py, customdata: cd,
+            marker: { size: 6, color: 'rgba(255,255,255,0.01)', line: { width: 0 } },
+            hovertemplate: 'Biela <b>%{customdata[0]}</b> · %{customdata[1]} m · %{customdata[2]}<extra></extra>', showlegend: false }];
+}
 function trazaMotores(idxs) {
   const s = new Set(idxs), x = [], y = [], c = [], cd = [];
   for (let i = 0; i < NF; i++) {
@@ -333,6 +361,7 @@ function render() {
   const data = [];
   if (ui.filas && ui.view !== 'pts') data.push(...trazasFilas(idxs, b));
   if (ui.view === 'pts' || ui.pts) data.push(trazaPuntos(idxs));
+  if (ui.biel) data.push(...trazaBielas(idxs));
   if (ui.mot) data.push(trazaMotores(idxs));
   data.push(...trazaRV(idxs));
   data.push(...trazaSel());
@@ -484,7 +513,7 @@ document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('c
 document.getElementById('metricSel').addEventListener('change', e => { ui.metric = e.target.value; render(); });
 document.getElementById('zonaSel').addEventListener('change', e => { ui.zona = e.target.value; render(); });
 document.getElementById('tipoSel').addEventListener('change', e => { ui.tipo = e.target.value; render(); });
-[['chkArt', 'soloArt'], ['chkAnom', 'soloAnom'], ['chkRV', 'soloRV'], ['chkOG', 'soloOG'], ['chkCapaRV', 'rv'], ['chkFilas', 'filas'], ['chkMot', 'mot'], ['chkPts', 'pts'], ['chkVec', 'vec']]
+[['chkArt', 'soloArt'], ['chkAnom', 'soloAnom'], ['chkRV', 'soloRV'], ['chkOG', 'soloOG'], ['chkCapaRV', 'rv'], ['chkFilas', 'filas'], ['chkMot', 'mot'], ['chkBiel', 'biel'], ['chkPts', 'pts'], ['chkVec', 'vec']]
   .forEach(([id, k]) => document.getElementById(id).addEventListener('change', e => { ui[k] = e.target.checked; render(); }));
 document.getElementById('expBt3d').addEventListener('click', expBt3d);
 document.getElementById('expView').addEventListener('click', expVista);
@@ -527,6 +556,7 @@ document.getElementById('notas').innerHTML =
    : 'Las cotas se han contrastado contra sus vecinas laterales y <b>ninguna</b> viene en otra referencia vertical. ');
 /* La casilla de filtro solo aparece si hay algo que filtrar; el aviso de que se
    ha mirado y está limpio va en las notas, que es donde no estorba. */
+if (PAREJA.length) { const l = document.getElementById('lblBiel'); if (l) { l.hidden = false; document.getElementById('nBiel').textContent = '(' + PAREJA.length + ')'; } }
 /* y lo mismo con lo que no es medida: la casilla solo si hay algo que aislar */
 if (OG_HAY && OG_N[0] < NF) {
   document.getElementById('lblOG').hidden = false;

@@ -14,8 +14,6 @@ que es donde se generan (un reparto, un dibujo):
                              (medida · una punta repuesta · las dos · copiada de
                              su hermana · del plano) y los puntos [id, desvío]
                              de cada cota repuesta (tools/cotas_asbuilt.py).
-  shear.csv              ->  OPCIONAL: cizallado por seguidor (tid, shear), para
-                             la marca de «sector anómalo».
   meta.json              ->  OPCIONAL: lo que ni el plano ni el levantamiento
                              saben (p. ej. {"cliente": "Acciona"}); pisa la meta.
 
@@ -77,8 +75,13 @@ def main():
         AB = json.load(f)
     with open(os.path.join(SRC, PLANTA + '_puntos.json'), encoding='utf-8') as f:
         NB = json.load(f)
-    shear = ({r['tid']: float(r['shear']) for r in rd('shear.csv') if r.get('shear') not in (None, '')}
-             if os.path.exists(os.path.join(SRC, 'shear.csv')) else {})
+    # EL CIZALLADO SE MIDE AQUI, DE LA GEOMETRIA QUE SE DIBUJA. Antes venia de
+    # shear.csv, calculado sobre la asignacion vieja del proveedor: marcaba 59
+    # seguidores como «sector anomalo» y, medido sobre el reparto nuevo, solo 1
+    # de ellos tiene de verdad las vigas corridas — las otras 58 marcas eran de
+    # una asignacion que ya no existe. Se calcula abajo, viga E contra viga W
+    # del mismo seguidor, y la marca sale de eso.
+    shear = {}
     # DE DÓNDE SALE CADA VIGA EN EL MODELO. El as-built del reparto trae la
     # geometría medida; el que decide qué cota es medida y qué cota se repone
     # es `cotas_asbuilt.py`, y eso vive en sanjose_cotas.json. Sin cruzarlos, el
@@ -209,6 +212,13 @@ def main():
     orden.sort(key=lambda t: (t[3], t[4]))              # de oeste a este, y de sur a norte
     for i, o in enumerate(orden):
         idx[o[0]] = i
+    # cizallado por seguidor: cuanto se corre a lo largo del eje el centro de
+    # una viga respecto del de su hermana (las dos comparten tubo: deberia ser
+    # ~0). Por id de tracker, con las dos vigas presentes.
+    _c = collections.defaultdict(list)
+    for o in orden:
+        _c[o[1]].append((o[4] + o[5]) / 2.0)
+    shear = {tid: abs(v[0] - v[1]) for tid, v in _c.items() if len(v) == 2}
 
     # --- pendiente transversal hacia la fila vecina de cada lado -------------
     # Vecina de cada lado: la fila contigua DE VERDAD — a menos de 1,6 pasos en X
@@ -289,7 +299,8 @@ def main():
         F['ho'].append(0); F['he'].append(0)
         F['pp'].append(None); F['dp'].append(None)
         F['es'].append(3 if sl is None else 0)
-        F['an'].append(1 if shear.get(tid, 0) > 0.5 else 0)
+        F['an'].append(1 if shear.get(tid, 0) > 0.5 else 0)   # sector anomalo: vigas corridas > 0,5 m
+        F['sh'].append(num(shear.get(tid), 3))
         F['ro'].append(None); F['re'].append(None)
         for k in ('to', 'tao', 'tmo', 'te', 'tae', 'tme'):
             F[k].append(None)

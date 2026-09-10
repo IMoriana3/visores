@@ -7,7 +7,7 @@ Entradas (en tools/source/):
        columnas: id, X, Y, Z, assigned, tracker_idx, Tracker_ID, NCU, corner, mesa, row_side
   - tracker_master.csv   : catálogo de trackers del Excel oficial
        columnas: Tracker_ID, X_ref, Y_ref, NCU, 'NCU ACCIONA', PS, GW, TCU
-  - shear.csv            : desfase Y entre filas por tracker (tid, shear)
+  - asbuilt/source/sanjose/shear.csv : desfase Y entre filas por tracker (tid, shear)
 
 Salida:
   - ../js/data.js  ->  window.DATA = { ... }
@@ -62,7 +62,9 @@ def main():
             print('levantamiento del topógrafo: %d puntos · la asignación traía %d · '
                   '%d entran SIN ASIGNAR' % (len(L), len(L) - len(faltan), len(faltan)))
     master = pd.read_csv(os.path.join(SRC, 'tracker_master.csv')).reset_index(drop=True)
-    shear  = pd.read_csv(os.path.join(SRC, 'shear.csv'))
+    # el cizallado vive con el as-built (asbuilt/source/sanjose/), que es
+    # quien lo usa para la marca de sector anomalo: un fichero, dos lectores
+    shear  = pd.read_csv(os.path.join(HERE, '..', '..', 'asbuilt', 'source', 'sanjose', 'shear.csv'))
 
     tid2i = {t: i for i, t in enumerate(master.Tracker_ID)}
 

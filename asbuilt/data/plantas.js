@@ -1,0 +1,1 @@
+window.PLANTAS={"ayora": {"codigo": "24025", "huso": "30N", "n_filas": 1508, "n_pts": 3069, "n_trk": 754, "titulo": "Ayora"}, "sanjose": {"codigo": "24019", "huso": "19S", "n_filas": 4578, "n_pts": 18289, "n_trk": 2289, "titulo": "San José"}};

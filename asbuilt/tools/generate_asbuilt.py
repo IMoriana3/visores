@@ -107,7 +107,7 @@ def main():
     # que no se levantó— se AÑADEN, para que el mapa y la escena 3D dibujen la
     # misma planta. Los reconstruidos no llevan tk (no se levantaron): esos se
     # cruzan por geometría (misma x y solape en n).
-    ORI, EXTRA = {}, []
+    ORI, EXTRA, JUN = {}, [], {}
     if CO:
         porTk = collections.defaultdict(list)
         for r in AB['f']:
@@ -125,6 +125,11 @@ def main():
                             and max(-r['zs'], -r['zn']) > min(f['n']) + 1]
                 if cand:
                     ORI[cand[0]['id']] = og
+                    # y la junta que el MODELO conserva: nm/ym (norte positivo).
+                    # En una fila con cota repuesta el modelo la suelta y la fila
+                    # va rigida; el as-built crudo aun la trae, con la cota
+                    # contaminada (daba motores «desplazados» 37 m).
+                    JUN[cand[0]['id']] = (f.get('nm'), f.get('ym'))
                     continue
                 # el seguidor reconstruido no tiene id de levantamiento (no se
                 # levantó): se le da uno propio, el mismo para sus dos vigas,
@@ -143,6 +148,8 @@ def main():
             a['id'] += '-E' if a['x'] >= max(b['x'] for b in par) else '-W'
 
     F = collections.defaultdict(list)
+    M, O = collections.defaultdict(list), collections.defaultdict(list)
+    GAP = float(AB['meta'].get('gapDrive') or 0.55)   # hueco del accionamiento en la junta (m)
     idx, orden = {}, []
     for r in list(AB['f']) + EXTRA:
         fid, tid, side = r['id'], r['tk'], r['id'].rsplit('-', 1)[1]
@@ -175,7 +182,29 @@ def main():
         sl = ((z1 - z0) / L * 100) if L > 5 else None  # pendiente longitudinal (%)
         if sl is not None and abs(sl) > 15:            # 15% es ya un talud: es un punto mal asignado, no un seguidor
             sl = None
-        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ())), og))
+        # LA JUNTA (el morro): donde el tubo articula y donde va el motor. El
+        # as-built la trae medida (zm/ym) en las filas con sus cuatro puntos;
+        # las reparadas y las del plano no la tienen. Con ella la fila se
+        # dibuja como sus DOS mesas y se puede trazar la biela entre las dos
+        # vigas del seguidor.
+        # EL 2D DIBUJA EL LEVANTAMIENTO TAL CUAL: puntas y junta del as-built,
+        # que es lo que el topografo entrego (la cota contaminada va MARCADA,
+        # no corregida). Del modelo solo se toma una decision: si el modelo
+        # soltó la junta —fila con una o dos cotas repuestas, que va rígida—
+        # aquí también va rígida. Mezclar puntas del as-built con la junta del
+        # modelo daba motores «desplazados» 37 m en las copias de hermana.
+        # (la copia de hermana también: su as-built es la fila que el modelo
+        # descartó, con la junta sana y las puntas a +36 m, y articularla
+        # dibuja una mesa al 200 %; el modelo la sustituye entera)
+        # y la fila cuya JUNTA es la contaminada (puntas sanas, ye=0): el
+        # modelo la suelta (nm=None) y la fila va rigida
+        modelo_rigida = bool(CO) and (og in (1, 2, 3) or (fid in JUN and JUN[fid][0] is None))
+        if modelo_rigida:
+            jm = jz = None
+        else:
+            jm = (cN - r['zm']) if r.get('zm') is not None else None
+            jz = (base + r['ym']) if r.get('ym') is not None else None
+        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ())), og, jm, jz))
 
     orden.sort(key=lambda t: (t[3], t[4]))              # de oeste a este, y de sur a norte
     for i, o in enumerate(orden):
@@ -211,7 +240,7 @@ def main():
         return (orden[i][6] + orden[i][7]) / 2
 
     for i, o in enumerate(orden):
-        fid, tid, side, x, y0, y1, z0, z1, sl, npts, og = o
+        fid, tid, side, x, y0, y1, z0, z1, sl, npts, og, jm, jz = o
         vo, ve = vecino[i]
         so = se = None
         if vo >= 0:
@@ -226,7 +255,31 @@ def main():
         F['fl'].append(0 if side == 'W' else 1)
         F['tp'].append('1V')
         F['st'].append(0)
-        F['ar'].append(0); F['ap'].append(0)           # articulaciones: no medidas en San José
+        # ARTICULADA = con la junta medida: la fila son dos mesas que pivotan
+        # en el morro, y asi se dibuja. Sin junta (cota repuesta, del plano) va
+        # como viga rigida, que es lo que el modelo hace con ella.
+        art = 1 if (jm is not None and jz is not None) else 0
+        F['ar'].append(art); F['ap'].append(0)
+        # el motor (O): en el morro si esta medido; si no, en el centro y marcado
+        if art:
+            t = (jm - y0) / (y1 - y0) if abs(y1 - y0) > 1e-6 else 0.5
+            recta = z0 + (z1 - z0) * t
+            O['x'].append(num(x)); O['y'].append(num(jm)); O['z'].append(num(jz)); O['m'].append(1)
+            O['d'].append(num(jz - recta))
+            # las dos mesas, con el hueco del accionamiento en la junta
+            g = GAP / 2.0
+            for lado, a, b in (('sur', y0, jm - g), ('norte', jm + g, y1)):
+                # cotas de cada mesa: la punta medida y la junta medida
+                if lado == 'sur':  za, zb = z0, jz
+                else:              za, zb = jz, z1
+                Lm = abs(b - a)
+                M['f'].append(i); M['s'].append(lado)
+                M['y0'].append(num(a)); M['y1'].append(num(b))
+                M['z0'].append(num(za)); M['z1'].append(num(zb))
+                M['L'].append(num(Lm, 2)); M['p'].append(num((zb - za) / Lm * 100 if Lm > 1 else None))
+        else:
+            O['x'].append(num(x)); O['y'].append(num((y0 + y1) / 2.0)); O['z'].append(num((z0 + z1) / 2.0))
+            O['m'].append(0); O['d'].append(None)
         F['x'].append(num(x)); F['y0'].append(num(y0)); F['y1'].append(num(y1))
         F['z0'].append(num(z0)); F['z1'].append(num(z1))
         F['sl'].append(num(sl)); F['slt'].append(num(sl))
@@ -292,14 +345,15 @@ def main():
     meta = dict(planta=MA.get('planta') or PLANTA, codigo=MA.get('codigo') or '',
                 cliente=MA.get('cliente') or '',
                 n_filas=len(orden), n_trk=len({o[1] for o in orden}), n_pts=len(P['id']),
-                n_art=0, n_art_trk=0, n_art_plano=0, huso=MA.get('huso'),
+                n_art=sum(F['ar']), n_art_trk=len({orden[i][1] for i in range(len(orden)) if F['ar'][i]}),
+                n_art_plano=0, huso=MA.get('huso'),
                 n_rv=sum(1 for v in P['r'] if v == ref_vertical.MARCADO),
                 n_rv_filas=sum(1 for v in F['rv'] if v),
                 pitch=round(pit[len(pit) // 2], 2) if pit else None,
                 h_eje=None, azimut_eje=None)
 
     with open(OUT, 'w', encoding='utf-8') as f:
-        f.write('window.DATA=' + json.dumps(dict(meta=meta, f=dict(F), m={}, o={}, p=dict(P)),
+        f.write('window.DATA=' + json.dumps(dict(meta=meta, f=dict(F), m=dict(M), o=dict(O), p=dict(P)),
                                             ensure_ascii=False, separators=(',', ':')) + ';\n')
     # el manifiesto: una entrada por planta generada (Ayora la escribe su propio
     # generador; si aún no está, se conserva lo que haya)

@@ -155,7 +155,7 @@ def main():
     GAP = float(AB['meta'].get('gapDrive') or 0.55)   # hueco del accionamiento en la junta (m)
     idx, orden = {}, []
     for r in list(AB['f']) + EXTRA:
-        fid, tid, side = r['id'], r['tk'], r['id'].rsplit('-', 1)[1]
+        fid, tid, side = r['id'], str(r['tk']), r['id'].rsplit('-', 1)[1]
         # una fila que el as-built midió y cotas NO conserva es una fila cuya
         # cota vino con otra referencia vertical: el modelo la repone, así que
         # tampoco puede pintarse como medida limpia
@@ -260,7 +260,7 @@ def main():
         if so is not None and abs(so) > 25: so = None
         if se is not None and abs(se) > 25: se = None
         F['id'].append(fid)
-        F['zo'].append(tid.split('-')[0].replace('TR_', '').replace('TR', '') or 'SJ')
+        F['zo'].append(r.get('zo') or (tid.split('-')[0].replace('TR_', '').replace('TR', '') or 'SJ'))
         F['tk'].append(int(tid.split('-')[-1]) if tid.split('-')[-1].isdigit() else i)
         F['fl'].append(0 if side == 'W' else 1)
         F['tp'].append('1V')

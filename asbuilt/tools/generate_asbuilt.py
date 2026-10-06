@@ -155,7 +155,7 @@ def main():
     GAP = float(AB['meta'].get('gapDrive') or 0.55)   # hueco del accionamiento en la junta (m)
     idx, orden = {}, []
     for r in list(AB['f']) + EXTRA:
-        fid, tid, side = r['id'], (r.get('zo'), str(r['tk'])), r['id'].rsplit('-', 1)[1]
+        fid, tid, side, zo = r['id'], (r.get('zo'), str(r['tk'])), r['id'].rsplit('-', 1)[1], r.get('zo')
         # una fila que el as-built midió y cotas NO conserva es una fila cuya
         # cota vino con otra referencia vertical: el modelo la repone, así que
         # tampoco puede pintarse como medida limpia
@@ -207,7 +207,7 @@ def main():
         else:
             jm = (cN - r['zm']) if r.get('zm') is not None else None
             jz = (base + r['ym']) if r.get('ym') is not None else None
-        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ())), og, jm, jz))
+        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ())), og, jm, jz, zo))
 
     orden.sort(key=lambda t: (t[3], t[4]))              # de oeste a este, y de sur a norte
     for i, o in enumerate(orden):
@@ -250,7 +250,7 @@ def main():
         return (orden[i][6] + orden[i][7]) / 2
 
     for i, o in enumerate(orden):
-        fid, tid, side, x, y0, y1, z0, z1, sl, npts, og, jm, jz = o
+        fid, tid, side, x, y0, y1, z0, z1, sl, npts, og, jm, jz, zo = o
         vo, ve = vecino[i]
         so = se = None
         if vo >= 0:
@@ -260,7 +260,7 @@ def main():
         if so is not None and abs(so) > 25: so = None
         if se is not None and abs(se) > 25: se = None
         F['id'].append(fid)
-        F['zo'].append(r.get('zo') or (tid[1].split('-')[0].replace('TR_', '').replace('TR', '') or 'SJ'))
+        F['zo'].append(zo or (tid[1].split('-')[0].replace('TR_', '').replace('TR', '') or 'SJ'))
         F['tk'].append(int(tid[1].split('-')[-1]) if tid[1].split('-')[-1].isdigit() else i)
         F['fl'].append(0 if side == 'W' else 1)
         F['tp'].append('1V')

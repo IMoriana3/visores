@@ -6,6 +6,7 @@ levantamiento. Es lo que se usa para configurar el backtracking corregido por te
 
     asbuilt/?planta=ayora      (por defecto)
     asbuilt/?planta=sanjose
+    asbuilt/?planta=elburgo
 
 Antes había dos aplicaciones distintas con el mismo nombre en el Panel: la de Ayora
 —geometría terminada— y la de San José —editor de asignación puntos↔tracker—, que no
@@ -18,6 +19,7 @@ planta en `data/<planta>.js`, todos con el mismo esquema (`window.DATA = {meta,f
 |---|---|---|---|---|
 | Ayora | 1.508 | 754 | 3.069 | `ayora/tools/generate_data.py` (levantamiento feb-2026) |
 | San José | 4.578 | 2.289 | 18.289 | `asbuilt/tools/generate_asbuilt.py sanjose` (reparto de cobertura-zigbee) |
+| El Burgo I | 254 | 127 medidos de 215 | 762 | RTK de `cobertura-zigbee`; NCU1 108/108 y NCU2 19/107, sin reconstruir los 88 ausentes |
 
 Las plantas sin articulaciones ni motores levantados (San José) traen esos bloques
 vacíos: la app lo dice («ninguna medida») en vez de fingir que valen cero.

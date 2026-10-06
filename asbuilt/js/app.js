@@ -518,6 +518,15 @@ document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('c
   document.getElementById('chkPts').checked = ui.pts = (ui.view === 'pts');
   pintaMetricas(); render();
 }));
+/* Los filtros salen del dato, no de una lista de Ayora. El Burgo aporta EB1/EB2
+   y el tipo 1V; San José/Ayora conservan sus valores reales. */
+(function pueblaFiltros(){
+  const zs=[...new Set((F.zo||[]).filter(v=>v!=null&&String(v).trim()!==''))].map(String).sort();
+  const ts=[...new Set((F.tp||[]).filter(v=>v!=null&&String(v).trim()!==''))].map(String).sort();
+  const z=document.getElementById('zonaSel'),t=document.getElementById('tipoSel');
+  if(z){z.innerHTML='<option value="all">Todas las zonas</option>';zs.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;z.appendChild(o);});}
+  if(t){t.innerHTML='<option value="all">Todos los tipos</option>';ts.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;t.appendChild(o);});}
+})();
 document.getElementById('metricSel').addEventListener('change', e => { ui.metric = e.target.value; render(); });
 document.getElementById('zonaSel').addEventListener('change', e => { ui.zona = e.target.value; render(); });
 document.getElementById('tipoSel').addEventListener('change', e => { ui.tipo = e.target.value; render(); });

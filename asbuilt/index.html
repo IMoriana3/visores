@@ -140,7 +140,7 @@
     if(h&&window.DATA&&DATA.meta)h.textContent=String(DATA.meta.planta||'').toUpperCase();
     /* Cada ?planta llega desde una tarjeta distinta del panel: la pestaña dice
        el nombre de ESA planta, para poder distinguir dos abiertas a la vez. */
-    var TITULOS={sanjose:'Visor de levantamiento · San José',ayora:'Visor de geometría as-built · Ayora'};
+    var TITULOS={sanjose:'Visor de levantamiento · San José',ayora:'Visor de geometría as-built · Ayora',elburgo:'Visor de geometría as-built · El Burgo I'};
     document.title=(TITULOS[PLANTA]||('Visor as-built · '+((PLANTAS[PLANTA]||{}).titulo||PLANTA)))+' — Factiun';
     /* los textos que antes iban fijos a Ayora salen ahora del propio dato */
     var m=window.DATA&&DATA.meta||{};

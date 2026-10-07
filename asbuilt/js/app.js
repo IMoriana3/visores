@@ -12,6 +12,17 @@ const _vacio = n => { const o = {}; ['f','s','y0','y1','z0','z1','L','p','x','y'
 const M = (D.m && D.m.f) ? D.m : _vacio(0);
 const O = (D.o && D.o.x) ? D.o : _vacio((D.f && D.f.id) ? D.f.id.length : 0);
 const NF = F.id.length, NP = P.id.length;
+const NM = Array.isArray(M.f) ? M.f.length : 0;
+const MESA_Z_OK = [];
+const MESA_FILAS_OK = new Set();
+for (let j = 0; j < NM; j++) {
+  if (M.z0 && M.z1 && M.z0[j] != null && M.z1[j] != null && !isNaN(M.z0[j]) && !isNaN(M.z1[j])) {
+    MESA_Z_OK.push(j); MESA_FILAS_OK.add(M.f[j]);
+  }
+}
+const MESA_COB = NF ? MESA_FILAS_OK.size / NF : 0;
+const MESA_EXACTA = MET.source_kind === 'authoritative_table_endpoints';
+const MESA_PROV = MESA_EXACTA ? 'extremos de mesa medidos' : 'geometría de mesa disponible en el as-built';
 /* Cotas con OTRA REFERENCIA VERTICAL (asbuilt/tools/ref_vertical.py). Un dato
    viejo no las trae: entonces no se dibuja nada, en vez de pintar todo «limpio»
    — que sería afirmar algo que no se ha comprobado. */
@@ -71,6 +82,18 @@ const MODES = {
       { k: 'rvf', t: 'Cota con otra referencia', cat: 'rvf' },
     ].concat(OG_HAY ? [{ k: 'oi', t: 'Origen de la cota de la viga', cat: 'og' }] : [])
   },
+  altura: {
+    help: MESA_EXACTA
+      ? 'Mapa de cotas por mesa. En esta planta los extremos de cada mesa son la fuente geométrica autoritativa: los extremos son HECHO; cota media, ΔZ y pendiente son DERIVADOS de esos extremos.'
+      : 'Mapa de cotas solo donde el as-built conserva geometría por mesa (' + MESA_FILAS_OK.size.toLocaleString('es') + ' de ' + NF.toLocaleString('es') + ' filas). Las filas sin geometría por mesa no se rellenan ni se interpolan.',
+    metrics: [
+      { k: 'mz',  t: 'Cota media de mesa (m)', mesa: true },
+      { k: 'mz0', t: 'Cota extremo sur de mesa (m)', mesa: true },
+      { k: 'mz1', t: 'Cota extremo norte de mesa (m)', mesa: true },
+      { k: 'mdz', t: 'ΔZ norte − sur de mesa (m)', mesa: true, div: true },
+      { k: 'mp',  t: 'Pendiente N-S de mesa (%)', mesa: true, div: true },
+    ]
+  },
   art: {
     help: 'Las bifilas articuladas de la planta (' + (MET.n_art_trk || 0) + ' seguidores, ' + (MET.n_art || 0) + ' filas). El quiebro es dato medido en el motor: las demás filas son vigas rígidas.',
     metrics: [
@@ -104,7 +127,7 @@ const MODES = {
 
 let ui = { view: 'bt3d', metric: 'sl', zona: 'all', tipo: 'all', soloArt: false, soloAnom: false,
            filas: true, mot: false, biel: false, pts: false, vec: false, soloRV: false, soloOG: false, rv: true };
-let sel = -1, uirev = 1, pendingRange = null;
+let sel = -1, selMesa = -1, uirev = 1, pendingRange = null;
 
 /* ---------------- valores derivados ---------------- */
 const dOE = new Float64Array(NF), dmot = new Float64Array(NF), dmesa = new Float64Array(NF);
@@ -119,6 +142,17 @@ for (let i = 0; i < NF; i++) {
   dmot[i] = O.d[i];
   const ms = mesasDe.get(i);
   if (ms && ms.length === 2) dmesa[i] = M.p[ms[1]] - M.p[ms[0]];
+}
+function mesaVal(k, j) {
+  if (j == null || j < 0 || j >= NM) return NaN;
+  const z0 = M.z0 && M.z0[j] != null ? +M.z0[j] : NaN;
+  const z1 = M.z1 && M.z1[j] != null ? +M.z1[j] : NaN;
+  if (k === 'mz')  return Number.isFinite(z0) && Number.isFinite(z1) ? (z0 + z1) / 2 : NaN;
+  if (k === 'mz0') return z0;
+  if (k === 'mz1') return z1;
+  if (k === 'mdz') return Number.isFinite(z0) && Number.isFinite(z1) ? z1 - z0 : NaN;
+  if (k === 'mp')  return M.p && M.p[j] != null ? +M.p[j] : NaN;
+  return NaN;
 }
 function val(k, i) {
   if (k === 'rvf') return RV_F[i] ? 1 : 0;
@@ -170,7 +204,13 @@ function bins(k, idxs) {
   }
   if (m.azi) return { kind: 'azi' };
   let vs;
-  if (m.pt) {
+  if (m.mesa) {
+    const s2 = new Set(idxs); vs = [];
+    for (let j = 0; j < NM; j++) {
+      if (!s2.has(M.f[j])) continue;
+      const v = mesaVal(k, j); if (Number.isFinite(v)) vs.push(v);
+    }
+  } else if (m.pt) {
     const s2 = new Set(idxs), a = P[m.pt] || [];
     vs = [];
     for (let q = 0; q < NP; q++) if (s2.has(P.f[q]) && a[q] != null && !isNaN(a[q])) vs.push(a[q]);
@@ -192,6 +232,49 @@ function binOf(b, v) {
 const fmt = (v, d = 2) => (v == null || isNaN(v)) ? '—' : v.toFixed(d);
 
 /* ---------------- trazas ---------------- */
+function trazasMesas(idxs, b) {
+  const sFilas = new Set(idxs), grupos = new Map(), conMesa = new Set();
+  for (let j = 0; j < NM; j++) {
+    const i = M.f[j];
+    if (!sFilas.has(i)) continue;
+    const v = mesaVal(ui.metric, j);
+    const k = binOf(b, v), g = String(k), col = k < 0 ? '#3d5566' : b.pal[k];
+    if (!grupos.has(g)) grupos.set(g, { col, x: [], y: [] });
+    const s = grupos.get(g);
+    s.x.push(F.x[i], F.x[i], NaN); s.y.push(M.y0[j], M.y1[j], NaN);
+    conMesa.add(i);
+  }
+  // La ausencia de geometría por mesa se ve como ausencia de dato, no como una
+  // mesa inventada a partir de la fila completa.
+  const sin = { col: '#343943', x: [], y: [] };
+  for (const i of idxs) if (!conMesa.has(i)) {
+    sin.x.push(F.x[i], F.x[i], NaN); sin.y.push(F.y0[i], F.y1[i], NaN);
+  }
+  if (sin.x.length) grupos.set('sin-dato', sin);
+  return [...grupos.values()].map(s => ({
+    type:'scattergl', mode:'lines', x:s.x, y:s.y,
+    line:{color:s.col,width:3.2}, hoverinfo:'skip', showlegend:false
+  }));
+}
+function trazaHoverMesas(idxs) {
+  const sFilas = new Set(idxs), x = [], y = [], cd = [];
+  for (let j = 0; j < NM; j++) {
+    const i = M.f[j]; if (!sFilas.has(i)) continue;
+    const z0 = mesaVal('mz0',j), z1 = mesaVal('mz1',j), zm = mesaVal('mz',j);
+    x.push(F.x[i]); y.push((M.y0[j] + M.y1[j]) / 2);
+    cd.push([F.id[i], '__mesa__', j, M.s && M.s[j] ? M.s[j] : ('mesa ' + (j + 1)),
+      fmt(z0,3), fmt(z1,3), fmt(zm,3), fmt(mesaVal('mdz',j),3), fmt(mesaVal('mp',j),3), MESA_PROV]);
+  }
+  return {
+    type:'scattergl', mode:'markers', x, y, customdata:cd,
+    marker:{size:9,color:'rgba(255,255,255,0.01)',line:{width:0}},
+    hovertemplate:'<b>%{customdata[0]}</b> · %{customdata[3]}<br>' +
+      'cota S %{customdata[4]} m · N %{customdata[5]} m<br>' +
+      'cota media %{customdata[6]} m · ΔZ %{customdata[7]} m<br>' +
+      'pendiente N-S %{customdata[8]} %<br>%{customdata[9]}<extra></extra>',
+    showlegend:false
+  };
+}
 function trazasFilas(idxs, b) {
   const grupos = new Map();
   for (const i of idxs) {
@@ -335,8 +418,10 @@ function trazaRV(idxs) {
 }
 function trazaSel() {
   if (sel < 0) return [];
+  const ySel = (selMesa >= 0 && M.f && M.f[selMesa] === sel)
+    ? [M.y0[selMesa], M.y1[selMesa]] : [F.y0[sel], F.y1[sel]];
   const t = [{
-    type: 'scattergl', mode: 'lines', x: [F.x[sel], F.x[sel]], y: [F.y0[sel], F.y1[sel]],
+    type: 'scattergl', mode: 'lines', x: [F.x[sel], F.x[sel]], y: ySel,
     line: { color: '#46d4f4', width: 5 }, hoverinfo: 'skip', showlegend: false
   }];
   if (ui.vec) for (const j of [F.vo[sel], F.ve[sel]]) {
@@ -366,19 +451,22 @@ function render() {
   idxsActuales = idxs;
   const b = bins(ui.metric, idxs);
   const data = [];
-  if (ui.filas && ui.view !== 'pts') data.push(...trazasFilas(idxs, b));
+  if (ui.filas && ui.view !== 'pts') data.push(...(ui.view === 'altura' ? trazasMesas(idxs, b) : trazasFilas(idxs, b)));
   if (ui.view === 'pts' || ui.pts) data.push(trazaPuntos(idxs));
   if (ui.biel) data.push(...trazaBielas(idxs));
   if (ui.mot) data.push(trazaMotores(idxs));
   data.push(...trazaRV(idxs));
   data.push(...trazaSel());
-  if (ui.view !== 'pts') data.push(trazaHover(idxs));
+  if (ui.view === 'altura') data.push(trazaHoverMesas(idxs));
+  else if (ui.view !== 'pts') data.push(trazaHover(idxs));
   Plotly.react(plotDiv, data, baseLayout(), { responsive: true, scrollZoom: true, displayModeBar: false });
   pintaLeyenda(b, idxs);
   pintaStats(idxs);
   document.getElementById('counts').innerHTML =
     '<span class="pill" style="--c:#36c275">' + idxs.length + ' filas</span>' +
     '<span class="pill" style="--c:#f5a623">' + idxs.filter(i => F.ar[i]).length + ' articuladas</span>' +
+    (ui.view === 'altura' ? '<span class="pill" style="--c:#4aa3b8">' +
+      MESA_Z_OK.filter(j => idxs.includes(M.f[j])).length + ' mesas con Z</span>' : '') +
     (RV_HAY && RV_N ? '<span class="pill" style="--c:#ff3ea5">' + idxs.filter(i => RV_F[i]).length +
        ' con cota de otra referencia</span>' : '');
 }
@@ -398,9 +486,14 @@ function pintaLeyenda(b, idxs) {
   el.innerHTML = h + '<p class="hint">' + (m.t || '') + '</p>';
 }
 function pintaStats(idxs) {
-  const k = ui.metric;
-  const vs = idxs.map(i => val(k, i)).filter(v => v != null && !isNaN(v));
-  let h = '<b>' + idxs.length + '</b> filas · <b>' + new Set(idxs.map(i => F.zo[i] + F.tk[i])).size + '</b> bifilas<br>';
+  const k = ui.metric, md = MODES[ui.view].metrics.find(x => x.k === k) || {};
+  let vs;
+  if (md.mesa) {
+    const s = new Set(idxs); vs = [];
+    for (let j = 0; j < NM; j++) if (s.has(M.f[j])) { const v = mesaVal(k,j); if (Number.isFinite(v)) vs.push(v); }
+  } else vs = idxs.map(i => val(k, i)).filter(v => v != null && !isNaN(v));
+  let h = '<b>' + idxs.length + '</b> filas · <b>' + new Set(idxs.map(i => F.zo[i] + F.tk[i])).size + '</b> bifilas' +
+    (md.mesa ? ' · <b>' + vs.length + '</b> mesas con dato' : '') + '<br>';
   if (vs.length && !(MODES[ui.view].metrics.find(x => x.k === k) || {}).cat) {
     vs.sort((a, b) => a - b);
     const med = vs[Math.floor(vs.length / 2)], mn = vs[0], mx = vs[vs.length - 1];
@@ -414,7 +507,17 @@ function pintaFicha() {
   if (sel < 0) { el.innerHTML = 'Haz clic en una fila del mapa.'; return; }
   const i = sel, ms = mesasDe.get(i);
   const lin = (a, b) => '<div class="fr"><span>' + a + '</span><b>' + b + '</b></div>';
-  let h = '<div class="fid mono">' + F.id[i] + '</div>' +
+  let h = '<div class="fid mono">' + F.id[i] + '</div>';
+  if (selMesa >= 0 && M.f && M.f[selMesa] === i) {
+    h += '<div class="fsep">Mesa seleccionada · ' + (M.s && M.s[selMesa] ? M.s[selMesa] : '') + '</div>' +
+      lin('Cota extremo sur', fmt(mesaVal('mz0',selMesa),3) + ' m') +
+      lin('Cota extremo norte', fmt(mesaVal('mz1',selMesa),3) + ' m') +
+      lin('Cota media', fmt(mesaVal('mz',selMesa),3) + ' m') +
+      lin('ΔZ norte − sur', fmt(mesaVal('mdz',selMesa),3) + ' m') +
+      lin('Pendiente N-S', fmt(mesaVal('mp',selMesa),3) + ' %') +
+      '<p class="hint">' + MESA_PROV + (MESA_EXACTA ? ' · extremos = HECHO; media/ΔZ/pendiente = DERIVADO.' : '') + '</p>';
+  }
+  h +=
     lin('Tipo', F.tp[i] + ' · ' + F.st[i] + ' strings') +
     lin('Viga', F.ar[i] ? 'articulada (2 alas)' : 'rígida') +
     lin('Longitud', fmt(F.y1[i] - F.y0[i], 2) + ' m') +
@@ -482,6 +585,15 @@ function expVista() {
     const s = new Set(idxsActuales), f = [];
     for (let k = 0; k < NP; k++) if (s.has(P.f[k])) f.push([P.id[k], P.x[k], P.y[k], P.z[k], F.id[P.f[k]], EXT_TXT[P.e[k]], P.j[k] ? 'SI' : 'NO', !RV_HAY ? 'sin comprobar' : RV_PT[k] === 1 ? 'OTRA REFERENCIA' : RV_PT[k] === 2 ? 'sin decidir' : 'comprobada', RV_D ? RV_D[k] : '']);
     csv(SLUG + '_puntos.csv', ['punto', 'x', 'y', 'z', 'fila', 'extremo', 'junta', 'referencia_vertical', 'desvio_lateral_m'], f);
+  } else if (ui.view === 'altura') {
+    const s = new Set(idxsActuales), f = [];
+    for (let j = 0; j < NM; j++) {
+      const i = M.f[j]; if (!s.has(i)) continue;
+      f.push([F.id[i], M.s ? M.s[j] : '', F.x[i], M.y0[j], M.y1[j], M.z0[j], M.z1[j],
+        mesaVal('mz',j), mesaVal('mdz',j), mesaVal('mp',j), MESA_PROV]);
+    }
+    csv(SLUG + '_alturas_modulos.csv',
+      ['fila','mesa','x','y_sur','y_norte','z_sur','z_norte','z_media','delta_z','pend_ns_pct','procedencia'], f);
   } else if (ui.view === 'art') {
     const f = [];
     for (const i of idxsActuales) {
@@ -515,7 +627,7 @@ document.querySelectorAll('input[name=view]').forEach(r => r.addEventListener('c
      plantas que todavía tienen puntos por asignar. */
   if (e.target.value === 'edit') { document.body.classList.add('modo-editor'); return; }
   document.body.classList.remove('modo-editor');
-  ui.view = e.target.value;
+  ui.view = e.target.value; selMesa = -1;
   ui.soloArt = (ui.view === 'art'); document.getElementById('chkArt').checked = ui.soloArt;
   document.getElementById('chkPts').checked = ui.pts = (ui.view === 'pts');
   pintaMetricas(); render();
@@ -541,20 +653,22 @@ plotDiv.addEventListener('click', () => { });
 function enganchaClick() {
   plotDiv.on('plotly_click', ev => {
     const p = ev.points && ev.points[0]; if (!p) return;
-    if (p.data.customdata && p.data.customdata[p.pointIndex] && typeof p.data.customdata[p.pointIndex][0] === 'string'
-      && p.data.customdata[p.pointIndex][0].indexOf('-') > 0) {
-      const id = p.data.customdata[p.pointIndex][0];
-      const k = F.id.indexOf(id); if (k >= 0) { sel = k; pintaFicha(); render(); }
+    const cd = p.data.customdata && p.data.customdata[p.pointIndex];
+    if (cd && cd[1] === '__mesa__') {
+      const k = F.id.indexOf(cd[0]); if (k >= 0) { sel = k; selMesa = +cd[2]; pintaFicha(); render(); }
+    } else if (cd && typeof cd[0] === 'string' && cd[0].indexOf('-') > 0) {
+      const id = cd[0];
+      const k = F.id.indexOf(id); if (k >= 0) { sel = k; selMesa = -1; pintaFicha(); render(); }
     } else if (p.data.customdata) {
       const id = p.data.customdata[p.pointIndex][1];
-      const k = F.id.indexOf(id); if (k >= 0) { sel = k; pintaFicha(); render(); }
+      const k = F.id.indexOf(id); if (k >= 0) { sel = k; selMesa = -1; pintaFicha(); render(); }
     }
   });
   plotDiv.on('plotly_relayout', e => {
     if (e['xaxis.range[0]'] != null) pendingRange = [[e['xaxis.range[0]'], e['xaxis.range[1]']], [e['yaxis.range[0]'], e['yaxis.range[1]']]];
   });
 }
-addEventListener('keydown', e => { if (e.key === 'Escape') { sel = -1; pintaFicha(); render(); } });
+addEventListener('keydown', e => { if (e.key === 'Escape') { sel = -1; selMesa = -1; pintaFicha(); render(); } });
 
 /* ---------------- arranque ---------------- */
 document.getElementById('hdrSub').textContent =
@@ -596,6 +710,8 @@ if (RV_HAY && RV_N) {
   document.getElementById('chkCapaRV').checked = true;
   document.getElementById('nRV').textContent = '(' + RV_N + ' filas · ' + MET.n_rv + ' cotas)';
 }
+const _lblAlt = document.getElementById('lblAlt');
+if (_lblAlt && !MESA_Z_OK.length) _lblAlt.style.display = 'none';
 /* Sin el dato no se ofrece la métrica: pintar todo de «sin cotas sospechosas»
    sería afirmar una comprobación que no se ha hecho. */
 if (!RV_HAY) for (const v of Object.values(MODES)) v.metrics = v.metrics.filter(m => m.k !== 'rvf' && m.k !== 'rvp' && m.k !== 'rd');

@@ -19,10 +19,23 @@ planta en `data/<planta>.js`, todos con el mismo esquema (`window.DATA = {meta,f
 |---|---|---|---|---|
 | Ayora | 1.508 | 754 | 3.069 | `ayora/tools/generate_data.py` (levantamiento feb-2026) |
 | San José | 4.578 | 2.289 | 18.289 | `asbuilt/tools/generate_asbuilt.py sanjose` (reparto de cobertura-zigbee) |
-| El Burgo I | 254 | 127 medidos de 215 | 762 | RTK de `cobertura-zigbee`; NCU1 108/108 y NCU2 19/107, sin reconstruir los 88 ausentes |
+| El Burgo I | 430 | 215 | 1.720 | `ElBurgoExtremosMesas 1.xlsx`: 860 mesas / 1.720 extremos autoritativos; RTK anterior = LEGACY |
 
 Las plantas sin articulaciones ni motores levantados (San José) traen esos bloques
 vacíos: la app lo dice («ninguna medida») en vez de fingir que valen cero.
+
+## Mapa de alturas de módulos
+
+La vista **Alturas módulos** colorea cada mesa con su propia geometría `m.z0/m.z1`.
+No interpola entre seguidores ni pinta una superficie continua que parezca medida.
+
+Métricas disponibles: cota media de mesa, cota del extremo sur, cota del extremo
+norte, ΔZ norte−sur y pendiente N-S. Cuando la geometría por mesa no cubre toda
+la planta, las filas sin dato quedan sin colorear y el visor publica la cobertura.
+
+En El Burgo la cobertura es completa: **860/860 mesas** con sus dos extremos.
+Los extremos son **HECHO** de la fuente autoritativa; cota media, ΔZ y pendiente
+son **DERIVADOS** de esos extremos. La fuente y su SHA siguen visibles en el visor.
 
 El **editor de asignación** de San José sigue donde estaba (`san-jose/`): es la
 herramienta de la fase anterior, la que produce el dato que aquí se muestra.

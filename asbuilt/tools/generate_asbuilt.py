@@ -8,8 +8,9 @@ para todas, para que el visor (asbuilt/index.html) sea uno solo.
 Entradas, en asbuilt/source/<planta>/ — copiadas tal cual de cobertura-zigbee,
 que es donde se generan (un reparto, un dibujo):
 
-  <planta>_asbuilt.json  ->  una fila por (tracker, lado E/W), ya con sus extremos
-  <planta>_puntos.json       medidos y sus puntos (tools/reparte_levantamiento.py).
+  <planta>_asbuilt.json  ->  una fila por (tracker, lado E/W), con sus extremos.
+                              Puede incluir exact_mesas (dos mesas por fila).
+  <planta>_puntos.json   ->  puntos/extremos que se muestran en el visor.
   <planta>_cotas.json    ->  de dónde sale la cota de cada viga en el MODELO
                              (medida · una punta repuesta · las dos · copiada de
                              su hermana · del plano) y los puntos [id, desvío]
@@ -22,13 +23,16 @@ entrada en asbuilt/data/plantas.js, que es de donde el selector de la página
 saca las plantas disponibles. La meta (nombre, código, huso UTM) sale del
 propio as-built, que la hereda del layout: aquí no hay nada escrito a mano.
 
-CÓMO CARGAR UNA PLANTA NUEVA (p. ej. elburgo):
-  1. en cobertura-zigbee: elburgo_layout.json (el plano) + elburgo_levantamiento.csv
-     (el CSV del topógrafo, id,X,Y,Z sin tocar);
-     python3 tools/reparte_levantamiento.py elburgo ; python3 tools/cotas_asbuilt.py elburgo
-  2. copiar elburgo_asbuilt.json, elburgo_puntos.json y elburgo_cotas.json a
-     asbuilt/source/elburgo/ ;  python3 asbuilt/tools/generate_asbuilt.py elburgo
-  3. abrir asbuilt/?planta=elburgo
+CÓMO CARGAR / ACTUALIZAR UNA PLANTA:
+  1. generar en su repositorio propietario los tres derivados asbuilt/cotas/puntos
+     desde la fuente canónica de esa planta;
+  2. copiar esos derivados a asbuilt/source/<planta>/ sin reinterpretarlos;
+  3. python3 asbuilt/tools/generate_asbuilt.py <planta>
+  4. abrir asbuilt/?planta=<planta>
+
+El Burgo: desde 2026-10-07 la fuente canónica son 860 mesas / 1.720 extremos
+medidos (ElBurgoExtremosMesas 1.xlsx) en cobertura-zigbee. El RTK parcial
+anterior (127/215 trackers) es LEGACY y no debe volver a alimentar este visor.
 
 DE DÓNDE VENÍA. Esto nació como san-jose/tools/generate_asbuilt.py, escrito
 para San José: rutas, huso 19S y nombres clavados. Lo que hace no tiene nada de
@@ -207,7 +211,13 @@ def main():
         else:
             jm = (cN - r['zm']) if r.get('zm') is not None else None
             jz = (base + r['ym']) if r.get('ym') is not None else None
-        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ())), og, jm, jz, zo))
+        # Si la fuente trae extremos exactos por mesa (El Burgo 2026-10-07),
+        # se conservan como geometría primaria del visor. No implica que la fila
+        # sea articulada: geometría de mesas y tipo mecánico son conceptos distintos.
+        exact_mesas = r.get('exact_mesas') or []
+        decl_art = 1 if r.get('art') else 0
+        orden.append((fid, tid, side, x, y0, y1, z0, z1, sl, len(nPor.get(fid, ())), og, jm, jz, zo,
+                      exact_mesas, decl_art))
 
     orden.sort(key=lambda t: (t[3], t[4]))              # de oeste a este, y de sur a norte
     for i, o in enumerate(orden):
@@ -250,7 +260,7 @@ def main():
         return (orden[i][6] + orden[i][7]) / 2
 
     for i, o in enumerate(orden):
-        fid, tid, side, x, y0, y1, z0, z1, sl, npts, og, jm, jz, zo = o
+        fid, tid, side, x, y0, y1, z0, z1, sl, npts, og, jm, jz, zo, exact_mesas, decl_art = o
         vo, ve = vecino[i]
         so = se = None
         if vo >= 0:
@@ -268,18 +278,34 @@ def main():
         # ARTICULADA = con la junta medida: la fila son dos mesas que pivotan
         # en el morro, y asi se dibuja. Sin junta (cota repuesta, del plano) va
         # como viga rigida, que es lo que el modelo hace con ella.
-        art = 1 if (jm is not None and jz is not None) else 0
+        art = (decl_art if exact_mesas else (1 if (jm is not None and jz is not None) else 0))
         F['ar'].append(art); F['ap'].append(0)
-        # el motor (O): en el morro si esta medido; si no, en el centro y marcado
-        if art:
+
+        if exact_mesas:
+            # FUENTE EXACTA POR MESA. Cada tramo se dibuja con sus DOS extremos
+            # propios; no se reconstruye desde una única junta. El punto común
+            # jm/jz, cuando existe, es una compatibilidad derivada (APROXIMACIÓN),
+            # por lo que NO se etiqueta como motor medido.
+            O['x'].append(num(x))
+            O['y'].append(num(jm if jm is not None else (y0 + y1) / 2.0))
+            O['z'].append(num(jz if jz is not None else (z0 + z1) / 2.0))
+            O['m'].append(0); O['d'].append(None)
+            for pos, em in enumerate(exact_mesas):
+                a = cN + em['south']['n']; b = cN + em['north']['n']
+                za = base + em['south']['y']; zb = base + em['north']['y']
+                Lm = abs(b - a)
+                M['f'].append(i); M['s'].append('sur' if pos == 0 else 'norte')
+                M['y0'].append(num(a)); M['y1'].append(num(b))
+                M['z0'].append(num(za)); M['z1'].append(num(zb))
+                M['L'].append(num(Lm, 2)); M['p'].append(num((zb - za) / Lm * 100 if Lm > 1 else None))
+        elif art:
+            # fuentes históricas: dos alas reconstruidas alrededor de una junta medida
             t = (jm - y0) / (y1 - y0) if abs(y1 - y0) > 1e-6 else 0.5
             recta = z0 + (z1 - z0) * t
             O['x'].append(num(x)); O['y'].append(num(jm)); O['z'].append(num(jz)); O['m'].append(1)
             O['d'].append(num(jz - recta))
-            # las dos mesas, con el hueco del accionamiento en la junta
             g = GAP / 2.0
             for lado, a, b in (('sur', y0, jm - g), ('norte', jm + g, y1)):
-                # cotas de cada mesa: la punta medida y la junta medida
                 if lado == 'sur':  za, zb = z0, jz
                 else:              za, zb = jz, z1
                 Lm = abs(b - a)

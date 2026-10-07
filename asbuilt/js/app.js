@@ -559,8 +559,14 @@ addEventListener('keydown', e => { if (e.key === 'Escape') { sel = -1; pintaFich
 /* ---------------- arranque ---------------- */
 document.getElementById('hdrSub').textContent =
   MET.n_trk.toLocaleString('es') + ' bifilas · ' + MET.n_filas.toLocaleString('es') + ' filas · ' +
-  MET.n_pts.toLocaleString('es') + ' puntos · ' + MET.n_art_trk + ' bifilas articuladas.';
+  MET.n_pts.toLocaleString('es') + ' puntos · ' + MET.n_art_trk + ' bifilas articuladas.' +
+  (MET.n_mesas ? ' · ' + MET.n_mesas.toLocaleString('es') + ' mesas' : '');
+const _prov = MET.source_sha256
+  ? '<b>Fuente geométrica:</b> ' + (MET.fuente || MET.source_kind || 'dataset medido') +
+    ' · SHA-256 <code>' + MET.source_sha256.slice(0,12) + '…</code>. '
+  : '';
 document.getElementById('notas').innerHTML =
+  _prov +
   (MET.pitch != null ? 'Pitch entre filas <b>' + MET.pitch.toFixed(3) + ' m</b>, uniforme (medido, no de proyecto). ' : '') +
   (MET.azimut_eje != null ? 'Eje norte-sur puro (azimut ' + MET.azimut_eje + '°). ' : 'Eje norte-sur. ') +
   (MET.h_eje != null ? 'Las cotas <b>Z eje</b> son la cota medida sobre módulo menos ' + MET.h_eje + ' m; ' +

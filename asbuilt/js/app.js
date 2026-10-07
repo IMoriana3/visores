@@ -201,9 +201,11 @@ function trazasFilas(idxs, b) {
     else { const k = binOf(b, val(ui.metric, i)); g = String(k); col = k < 0 ? '#3d5566' : b.pal[k]; }
     if (!grupos.has(g)) grupos.set(g, { col, x: [], y: [] });
     const s = grupos.get(g);
-    // fila articulada -> dos tramos (quiebro real en el motor)
+    // Si hay geometría exacta por mesa, SE DIBUJA SIEMPRE. Tener dos mesas
+    // medidas no convierte mecánicamente la fila en articulada: F.ar mantiene
+    // esa semántica y M conserva únicamente la geometría de cada mesa.
     const ms = mesasDe.get(i);
-    if (F.ar[i] && ms) {
+    if (ms) {
       for (const j of ms) { s.x.push(F.x[i], F.x[i], NaN); s.y.push(M.y0[j], M.y1[j], NaN); }
     } else {
       s.x.push(F.x[i], F.x[i], NaN); s.y.push(F.y0[i], F.y1[i], NaN);
@@ -418,8 +420,8 @@ function pintaFicha() {
     lin('Longitud', fmt(F.y1[i] - F.y0[i], 2) + ' m') +
     lin('Cota eje S → N', fmt(F.z0[i], 3) + ' → ' + fmt(F.z1[i], 3) + ' m') +
     lin('Pend. longitudinal', fmt(F.sl[i], 3) + ' %');
-  if (F.ar[i] && ms) h += lin('Ala sur / norte', fmt(M.p[ms[0]], 3) + ' % / ' + fmt(M.p[ms[1]], 3) + ' %') +
-    lin('Desplaz. del motor', fmt(O.d[i], 3) + ' m');
+  if (ms) h += lin(F.ar[i] ? 'Ala sur / norte' : 'Mesa sur / norte', fmt(M.p[ms[0]], 3) + ' % / ' + fmt(M.p[ms[1]], 3) + ' %');
+  if (F.ar[i] && O.m[i]) h += lin('Desplaz. del motor', fmt(O.d[i], 3) + ' m');
   h += '<div class="fsep">Backtracking · lado oeste (atardecer)</div>' +
     lin('Pend. transversal', fmt(F.so[i]) + ' %') +
     lin('Pend. resultante', fmt(F.mo[i]) + ' %') +

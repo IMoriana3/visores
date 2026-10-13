@@ -38,16 +38,14 @@
 </header>
 
 <main>
-  <p class="lead">Cada visor casa un levantamiento topográfico con la geometría de seguidores de su planta.
-  Funcionan sin servidor y sin red: los datos y la librería de dibujo se cargan como ficheros locales.</p>
+  <p class="lead">Revisa el levantamiento y la geometría de los seguidores de cada planta. Los visores funcionan con ficheros locales, sin servidor ni conexión.</p>
 
   <div class="grid">
     <a class="card" href="ayora/">
       <span class="code">24025</span>
       <h2>Ayora</h2>
       <p class="loc">Valencia · España</p>
-      <p>Geometría as-built de 754 seguidores bifila a partir de 3.069 puntos, y los parámetros de
-      backtracking corregido por terreno que se cargan en cada TCU.</p>
+      <p>Revisa 754 seguidores bifila, 3.069 puntos y los parámetros de backtracking por TCU.</p>
       <div class="tags"><span class="tag">1.508 filas</span><span class="tag">17 articulados</span><span class="tag">config. TCU</span></div>
     </a>
 
@@ -55,15 +53,12 @@
       <span class="code">24019</span>
       <h2>San José</h2>
       <p class="loc">Arequipa · Perú · Acciona</p>
-      <p>Editor de la asignación de 18.190 puntos de levantamiento a 2.289 seguidores, resuelta por
-      flujo de coste mínimo y corregible a mano.</p>
+      <p>Revisa y corrige la asignación de 18.190 puntos a 2.289 seguidores.</p>
       <div class="tags"><span class="tag">18.190 puntos</span><span class="tag">2.289 trackers</span><span class="tag">21 NCU</span></div>
     </a>
   </div>
 
-  <p class="foot2">Los dos visores comparten el tema (<span class="mono">css/factiun.css</span>) y una única copia
-  de la librería de dibujo (<span class="mono">lib/plotly.min.js</span>, 4,7 MB). Cada uno lleva sus propios datos
-  y su generador en <span class="mono">&lt;planta&gt;/tools/</span>.</p>
+  <p class="foot2">Cada visor incluye los datos de su planta.</p>
 </main>
 
 <footer class="app-foot">
